@@ -1,6 +1,9 @@
 ﻿#include "eneida.h"
+#include "eneida_demo.cpp"
 
 extern "C" { int _fltused; }
+extern "C" float asm_sinf(float x);
+extern "C" float asm_cosf(float x);
 
 static LRESULT CALLBACK
 winproc(HWND win, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -57,7 +60,7 @@ update_frame_stats(demo_t *demo)
     fps_frame++;
 }
 
-static int
+static bool
 init(demo_t *demo)
 {
     WNDCLASS winclass = {};
@@ -75,17 +78,17 @@ init(demo_t *demo)
 
     RECT rect = { 0, 0, demo->resolution[0], demo->resolution[1] };
     if (!AdjustWindowRect(&rect, WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MINIMIZEBOX, FALSE))
-        return 0;
+        return false;
 
     demo->hwnd = CreateWindow(k_demo_name, k_demo_name,
                               WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MINIMIZEBOX | WS_VISIBLE,
                               CW_USEDEFAULT, CW_USEDEFAULT,
                               rect.right - rect.left, rect.bottom - rect.top,
                               nullptr, nullptr, nullptr, 0);
-    if (!demo->hwnd) return 0;
+    if (!demo->hwnd) return false;
 
     HRESULT res = CreateDXGIFactory1(IID_PPV_ARGS(&demo->dxgi_factory));
-    if (FAILED(res)) return 0;
+    if (FAILED(res)) return false;
 
 #ifdef _DEBUG
     ID3D12Debug *dbg = nullptr;
@@ -97,14 +100,14 @@ init(demo_t *demo)
 #endif
 
     res = D3D12CreateDevice(0, D3D_FEATURE_LEVEL_11_1, IID_PPV_ARGS(&demo->device));
-    if (FAILED(res)) return 0;
+    if (FAILED(res)) return false;
 
     D3D12_COMMAND_QUEUE_DESC desc_cmd_queue = {};
     desc_cmd_queue.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
     desc_cmd_queue.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
     desc_cmd_queue.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
     res = demo->device->CreateCommandQueue(&desc_cmd_queue, IID_PPV_ARGS(&demo->cmd_queue));
-    if (FAILED(res)) return 0;
+    if (FAILED(res)) return false;
 
     DXGI_SWAP_CHAIN_DESC desc_swap_chain = {};
     desc_swap_chain.BufferCount = k_swap_buffer_count;
@@ -115,7 +118,7 @@ init(demo_t *demo)
     desc_swap_chain.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
     desc_swap_chain.Windowed = (k_demo_fullscreen ? FALSE : TRUE);
     res = demo->dxgi_factory->CreateSwapChain(demo->cmd_queue, &desc_swap_chain, &demo->dxgi_swap_chain);
-    if (FAILED(res)) return 0;
+    if (FAILED(res)) return false;
 
     demo->rtv_dh_size = demo->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     demo->cbv_srv_uav_dh_size = demo->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -127,13 +130,13 @@ init(demo_t *demo)
         desc_heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         desc_heap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         res = demo->device->CreateDescriptorHeap(&desc_heap, IID_PPV_ARGS(&demo->rtv_dh.heap));
-        if (FAILED(res)) return 0;
+        if (FAILED(res)) return false;
 
         demo->rtv_dh.cpu_handle = demo->rtv_dh.heap->GetCPUDescriptorHandleForHeapStart();
 
         for (int i = 0; i < k_swap_buffer_count; ++i) {
             res = demo->dxgi_swap_chain->GetBuffer(i, IID_PPV_ARGS(&demo->swap_buffer[i]));
-            if (FAILED(res)) return 0;
+            if (FAILED(res)) return false;
             D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = demo->rtv_dh.cpu_handle;
             rtv_handle.ptr += i * demo->rtv_dh_size;
             demo->device->CreateRenderTargetView(demo->swap_buffer[i], nullptr, rtv_handle);
@@ -141,13 +144,9 @@ init(demo_t *demo)
     }
 
     demo->viewport = { 0.0f, 0.0f, (float)demo->resolution[0], (float)demo->resolution[1], 0.0f, 1.0f };
+    demo->scissor_rect = { 0, 0, demo->resolution[0], demo->resolution[1] };
 
-    demo->scissor_rect.left = 0;
-    demo->scissor_rect.top = 0;
-    demo->scissor_rect.right = demo->resolution[0];
-    demo->scissor_rect.bottom = demo->resolution[1];
-
-    return 1;
+    return true;
 }
 
 static void
@@ -182,17 +181,18 @@ start()
     demo.resolution[0] = k_demo_resx;
     demo.resolution[1] = k_demo_resy;
 
+    float y = asm_sinf(1.0f);
+    y = asm_cosf(1.0f);
+
     if (!init(&demo)) {
         deinit(&demo);
         ExitProcess(1);
     }
-    /*
     if (!demo_init(&demo)) {
         demo_deinit(&demo);
         deinit(&demo);
         ExitProcess(1);
     }
-    */
 
     MSG msg = { 0 };
     for (;;) {
@@ -201,11 +201,11 @@ start()
             if (msg.message == WM_QUIT) break;
         } else {
             update_frame_stats(&demo);
-            //demo_update(&demo);
+            demo_update(&demo);
         }
     }
 
-    //demo_deinit(&demo);
+    demo_deinit(&demo);
     deinit(&demo);
     ExitProcess(0);
 }

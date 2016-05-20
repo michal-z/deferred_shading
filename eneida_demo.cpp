@@ -1,219 +1,182 @@
-//-----------------------------------------------------------------------------
-static void *
-load_binary_file(const char *filename, size_t *filesize)
-{
-    if (!filename || !filesize) return NULL;
-
-    HANDLE file = CreateFile(filename, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (file == INVALID_HANDLE_VALUE) return NULL;
-
-    DWORD size = GetFileSize(file, NULL);
-    if (size == INVALID_FILE_SIZE) {
-        CloseHandle(file);
-        return NULL;
-    }
-
-    void *data = mem_alloc(size);
-    if (!data) {
-        CloseHandle(file);
-        return NULL;
-    }
-
-    DWORD bytes;
-    BOOL res = ReadFile(file, data, size, &bytes, NULL);
-    if (!res || bytes != size) {
-        CloseHandle(file);
-        mem_free(data);
-        return NULL;
-    }
-
-    CloseHandle(file);
-    *filesize = size;
-    return data;
-}
-//-----------------------------------------------------------------------------
-static int
+static bool
 compile_shaders(demo_t *demo)
 {
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {
-        .pRootSignature = demo->root_signature,
-        .VS = { g_vs_full_triangle, sizeof(g_vs_full_triangle) },
-        .PS = { g_ps_sketch0, sizeof(g_ps_sketch0) },
-        .RasterizerState.FillMode = D3D12_FILL_MODE_SOLID,
-        .RasterizerState.CullMode = D3D12_CULL_MODE_NONE,
-        .BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL,
-        .SampleMask = UINT_MAX,
-        .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
-        .NumRenderTargets = 1,
-        .RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM,
-        .SampleDesc.Count = 1
-    };
-    HRESULT r = ID3D12Device_CreateGraphicsPipelineState(demo->device, &pso_desc, &IID_ID3D12PipelineState,
-                                                         (void **)&demo->pso);
-    if (FAILED(r)) return 0;
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {};
+    pso_desc.pRootSignature = demo->root_signature;
+    pso_desc.VS = { g_vs_full_triangle, sizeof(g_vs_full_triangle) };
+    pso_desc.PS = { g_ps_sketch0, sizeof(g_ps_sketch0) };
+    pso_desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    pso_desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    pso_desc.SampleMask = UINT_MAX;
+    pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pso_desc.NumRenderTargets = 1;
+    pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    pso_desc.SampleDesc.Count = 1;
+    HRESULT r = demo->device->CreateGraphicsPipelineState(&pso_desc, IID_PPV_ARGS(&demo->pso));
+    if (FAILED(r)) return false;
+    return true;
+}
 
-    return 1;
-}
-//-----------------------------------------------------------------------------
 static void
-resource_barrier(ID3D12GraphicsCommandList *cmd_list, ID3D12Resource *resource,
-                 D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
+transition_barrier(ID3D12GraphicsCommandList *cmdlist, ID3D12Resource *resource,
+                   D3D12_RESOURCE_STATES state_before, D3D12_RESOURCE_STATES state_after)
 {
-    D3D12_RESOURCE_BARRIER barrier_desc = {
-        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-        .Transition.pResource = resource,
-        .Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-        .Transition.StateBefore = state_before,
-        .Transition.StateAfter = state_after
-    };
-    ID3D12GraphicsCommandList_ResourceBarrier(cmd_list, 1, &barrier_desc);
+    D3D12_RESOURCE_BARRIER barrier_desc = {};
+    barrier_desc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier_desc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier_desc.Transition.pResource = resource;
+    barrier_desc.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier_desc.Transition.StateBefore = state_before;
+    barrier_desc.Transition.StateAfter = state_after;
+    cmdlist->ResourceBarrier(1, &barrier_desc);
 }
-//-----------------------------------------------------------------------------
+
 static void
 generate_device_commands(demo_t *demo)
 {
-    ID3D12CommandAllocator_Reset(demo->cmd_allocator);
+    demo->cmd_allocator->Reset();
 
-    ID3D12GraphicsCommandList_Reset(demo->cmd_list, demo->cmd_allocator, demo->pso);
-    ID3D12GraphicsCommandList_SetDescriptorHeaps(demo->cmd_list, 1, &demo->cbv_srv_uav_dh.heap);
+    ID3D12GraphicsCommandList *cmdlist = demo->cmd_list;
 
-    ID3D12GraphicsCommandList_SetGraphicsRootSignature(demo->cmd_list, demo->root_signature);
-    ID3D12GraphicsCommandList_RSSetViewports(demo->cmd_list, 1, &demo->viewport);
-    ID3D12GraphicsCommandList_RSSetScissorRects(demo->cmd_list, 1, &demo->scissor_rect);
+    cmdlist->Reset(demo->cmd_allocator, demo->pso);
+    cmdlist->SetDescriptorHeaps(1, &demo->cbv_srv_uav_dh.heap);
 
-    resource_barrier(demo->cmd_list, demo->swap_buffer[demo->swap_buffer_index], D3D12_RESOURCE_STATE_PRESENT,
-                     D3D12_RESOURCE_STATE_RENDER_TARGET);
+    cmdlist->SetGraphicsRootSignature(demo->root_signature);
+    cmdlist->RSSetViewports(1, &demo->viewport);
+    cmdlist->RSSetScissorRects(1, &demo->scissor_rect);
+
+    transition_barrier(cmdlist, demo->swap_buffer[demo->swap_buffer_index], D3D12_RESOURCE_STATE_PRESENT,
+                       D3D12_RESOURCE_STATE_RENDER_TARGET);
 
     float clear_color[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
     D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = demo->rtv_dh.cpu_handle;
     rtv_handle.ptr += demo->swap_buffer_index * demo->rtv_dh_size;
 
-    ID3D12GraphicsCommandList_SetGraphicsRootDescriptorTable(demo->cmd_list, 0, demo->cbv_srv_uav_dh.gpu_handle);
+    cmdlist->SetGraphicsRootDescriptorTable(0, demo->cbv_srv_uav_dh.gpu_handle);
 
-    ID3D12GraphicsCommandList_ClearRenderTargetView(demo->cmd_list, rtv_handle, clear_color, 0, NULL);
-    ID3D12GraphicsCommandList_OMSetRenderTargets(demo->cmd_list, 1, &rtv_handle, TRUE, NULL);
-    ID3D12GraphicsCommandList_IASetPrimitiveTopology(demo->cmd_list, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmdlist->ClearRenderTargetView(rtv_handle, clear_color, 0, NULL);
+    cmdlist->OMSetRenderTargets(1, &rtv_handle, TRUE, NULL);
+    cmdlist->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    ID3D12GraphicsCommandList_DrawInstanced(demo->cmd_list, 3, 1, 0, 0);
+    cmdlist->DrawInstanced(3, 1, 0, 0);
 
-    resource_barrier(demo->cmd_list, demo->swap_buffer[demo->swap_buffer_index], D3D12_RESOURCE_STATE_RENDER_TARGET,
-                     D3D12_RESOURCE_STATE_PRESENT);
+    transition_barrier(cmdlist, demo->swap_buffer[demo->swap_buffer_index], D3D12_RESOURCE_STATE_RENDER_TARGET,
+                       D3D12_RESOURCE_STATE_PRESENT);
 
-    ID3D12GraphicsCommandList_Close(demo->cmd_list);
+    cmdlist->Close();
 }
-//-----------------------------------------------------------------------------
+
 static void
 wait_for_device(demo_t *demo)
 {
     UINT64 value = demo->fence_value;
-    ID3D12CommandQueue_Signal(demo->cmd_queue, demo->fence, value);
+    demo->cmd_queue->Signal(demo->fence, value);
     demo->fence_value++;
 
-    if (ID3D12Fence_GetCompletedValue(demo->fence) < value) {
-        ID3D12Fence_SetEventOnCompletion(demo->fence, value, demo->fence_event);
+    if (demo->fence->GetCompletedValue() < value) {
+        demo->fence->SetEventOnCompletion(value, demo->fence_event);
         WaitForSingleObject(demo->fence_event, INFINITE);
     }
 }
-//-----------------------------------------------------------------------------
-static int
+
+static bool
 demo_init(demo_t *demo)
 {
-    HRESULT res = ID3D12Device_CreateCommandAllocator(demo->device, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                                      &IID_ID3D12CommandAllocator, &demo->cmd_allocator);
-    if (FAILED(res)) return 0;
+    HRESULT res = demo->device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                                       IID_PPV_ARGS(&demo->cmd_allocator));
+    if (FAILED(res)) return false;
 
     // root signature
     {
-        D3D12_DESCRIPTOR_RANGE descriptor_range[1] = {
-            {
-                .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-                .NumDescriptors = 1,
-                .BaseShaderRegister = 0,
-                .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
-            }
-        };
-        D3D12_ROOT_PARAMETER param = {
-            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-            .DescriptorTable.NumDescriptorRanges = ARRAYSIZE(descriptor_range),
-            .DescriptorTable.pDescriptorRanges = descriptor_range,
-            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
-        };
-        D3D12_ROOT_SIGNATURE_DESC root_signature_desc = { .NumParameters = 1, .pParameters = &param };
+        D3D12_DESCRIPTOR_RANGE descriptor_range = {};
+        descriptor_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+        descriptor_range.NumDescriptors = 1;
+        descriptor_range.BaseShaderRegister = 0;
+        descriptor_range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-        ID3DBlob *blob = NULL;
-        res = D3D12SerializeRootSignature(&root_signature_desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, NULL);
-        res |= ID3D12Device_CreateRootSignature(demo->device, 0, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob),
-                                                &IID_ID3D12RootSignature, (void **)&demo->root_signature);
+        D3D12_ROOT_PARAMETER param = {};
+        param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        param.DescriptorTable.NumDescriptorRanges = 1;
+        param.DescriptorTable.pDescriptorRanges = &descriptor_range;
+        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_ROOT_SIGNATURE_DESC root_signature_desc = {};
+        root_signature_desc.NumParameters = 1;
+        root_signature_desc.pParameters = &param;
+
+        ID3DBlob *blob = nullptr;
+        res = D3D12SerializeRootSignature(&root_signature_desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, nullptr);
+        res |= demo->device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                                 IID_PPV_ARGS(&demo->root_signature));
         SAFE_RELEASE(blob);
-        if (FAILED(res)) return 0;
+        if (FAILED(res)) return false;
     }
     // CBV_SRV_UAV descriptor heap (visible by shaders)
     {
-        D3D12_DESCRIPTOR_HEAP_DESC desc_heap = {
-            .NumDescriptors = 4,
-            .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
-        };
-        res = ID3D12Device_CreateDescriptorHeap(demo->device, &desc_heap, &IID_ID3D12DescriptorHeap,
-                                                (void **)&demo->cbv_srv_uav_dh.heap);
-        if (FAILED(res)) return 0;
-        demo->cbv_srv_uav_dh.cpu_handle = ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(demo->cbv_srv_uav_dh.heap);
-        demo->cbv_srv_uav_dh.gpu_handle = ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(demo->cbv_srv_uav_dh.heap);
+        D3D12_DESCRIPTOR_HEAP_DESC desc_heap = {};
+        desc_heap.NumDescriptors = 4;
+        desc_heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc_heap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        res = demo->device->CreateDescriptorHeap(&desc_heap, IID_PPV_ARGS(&demo->cbv_srv_uav_dh.heap));
+        if (FAILED(res)) return false;
+        demo->cbv_srv_uav_dh.cpu_handle = demo->cbv_srv_uav_dh.heap->GetCPUDescriptorHandleForHeapStart();
+        demo->cbv_srv_uav_dh.gpu_handle = demo->cbv_srv_uav_dh.heap->GetGPUDescriptorHandleForHeapStart();
     }
     // constant buffer
     {
-        D3D12_HEAP_PROPERTIES props_heap = { .Type = D3D12_HEAP_TYPE_UPLOAD };
-        D3D12_RESOURCE_DESC desc_buffer = {
-            .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-            .Width = 1024,
-            .Height = 1,
-            .DepthOrArraySize = 1,
-            .MipLevels = 1,
-            .SampleDesc.Count = 1,
-            .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
-        };
-        res = ID3D12Device_CreateCommittedResource(demo->device, &props_heap, D3D12_HEAP_FLAG_NONE, &desc_buffer,
-                                                   D3D12_RESOURCE_STATE_GENERIC_READ, NULL,
-                                                   &IID_ID3D12Resource, (void **)&demo->constant_buffer);
-        if (FAILED(res)) return 0;
+        D3D12_HEAP_PROPERTIES props_heap = {};
+        props_heap.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+        D3D12_RESOURCE_DESC desc_buffer = {};
+        desc_buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc_buffer.Width = 1024;
+        desc_buffer.Height = 1;
+        desc_buffer.DepthOrArraySize = 1;
+        desc_buffer.MipLevels = 1;
+        desc_buffer.SampleDesc.Count = 1;
+        desc_buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        res = demo->device->CreateCommittedResource(&props_heap, D3D12_HEAP_FLAG_NONE, &desc_buffer,
+                                                    D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                    IID_PPV_ARGS(&demo->constant_buffer));
+        if (FAILED(res)) return false;
     }
     // descriptors (cbv_srv_uav_dh)
     {
         D3D12_CPU_DESCRIPTOR_HANDLE descriptor = demo->cbv_srv_uav_dh.cpu_handle;
 
         D3D12_CONSTANT_BUFFER_VIEW_DESC desc_cbuffer;
-        desc_cbuffer.BufferLocation = ID3D12Resource_GetGPUVirtualAddress(demo->constant_buffer);
+        desc_cbuffer.BufferLocation = demo->constant_buffer->GetGPUVirtualAddress();
         desc_cbuffer.SizeInBytes = 16 * 1024;
 
-        ID3D12Device_CreateConstantBufferView(demo->device, &desc_cbuffer, descriptor);
+        demo->device->CreateConstantBufferView(&desc_cbuffer, descriptor);
     }
 
-    res = ID3D12Device_CreateFence(demo->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void **)&demo->fence);
-    if (FAILED(res)) return 0;
+    res = demo->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&demo->fence));
+    if (FAILED(res)) return false;
     demo->fence_value = 1;
 
-    demo->fence_event = CreateEventEx(NULL, NULL, 0, EVENT_ALL_ACCESS);
-    if (!demo->fence_event) return 0;
+    demo->fence_event = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
+    if (!demo->fence_event) return false;
 
-    if (!compile_shaders(demo)) return 0;
+    if (!compile_shaders(demo)) return false;
 
-    res = ID3D12Device_CreateCommandList(demo->device, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, demo->cmd_allocator,
-                                         NULL, &IID_ID3D12GraphicsCommandList, (void **)&demo->cmd_list);
-    if (FAILED(res)) return 0;
+    res = demo->device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, demo->cmd_allocator,
+                                          nullptr, IID_PPV_ARGS(&demo->cmd_list));
+    if (FAILED(res)) return false;
 
-    ID3D12GraphicsCommandList_Close(demo->cmd_list);
+    demo->cmd_list->Close();
 
     ID3D12CommandList *cmd_lists[] = { (ID3D12CommandList *)demo->cmd_list };
-    ID3D12CommandQueue_ExecuteCommandLists(demo->cmd_queue, ARRAYSIZE(cmd_lists), cmd_lists);
+    demo->cmd_queue->ExecuteCommandLists(ARRAYSIZE(cmd_lists), cmd_lists);
 
     wait_for_device(demo);
     //audio_start(&demo->audio);
 
-    return 1;
+    return true;
 }
-//-----------------------------------------------------------------------------
+
 static void
 demo_deinit(demo_t *demo)
 {
@@ -224,25 +187,24 @@ demo_deinit(demo_t *demo)
 
     SAFE_RELEASE(demo->cmd_allocator);
 }
-//-----------------------------------------------------------------------------
+
 static void
 demo_update(demo_t *demo)
 {
     generate_device_commands(demo);
 
     float *ptr;
-    ID3D12Resource_Map(demo->constant_buffer, 0, NULL, (void **)&ptr);
+    demo->constant_buffer->Map(0, nullptr, (void **)&ptr);
     ptr[0] = (float)demo->time;
     ptr[1] = (float)demo->resolution[0];
     ptr[2] = (float)demo->resolution[1];
-    ID3D12Resource_Unmap(demo->constant_buffer, 0, NULL);
+    demo->constant_buffer->Unmap(0, nullptr);
 
     ID3D12CommandList *cmd_lists[] = { (ID3D12CommandList *)demo->cmd_list };
-    ID3D12CommandQueue_ExecuteCommandLists(demo->cmd_queue, ARRAYSIZE(cmd_lists), cmd_lists);
+    demo->cmd_queue->ExecuteCommandLists(ARRAYSIZE(cmd_lists), cmd_lists);
 
-    IDXGISwapChain_Present(demo->dxgi_swap_chain, 0, 0);
+    demo->dxgi_swap_chain->Present(0, 0);
     demo->swap_buffer_index = (demo->swap_buffer_index + 1) % k_swap_buffer_count;
 
     wait_for_device(demo);
 }
-//-----------------------------------------------------------------------------
