@@ -1,5 +1,5 @@
 #include "eneida.h"
-
+#if 0
 uint8_t *
 load_file(const char *filename, size_t *filesize)
 {
@@ -244,3 +244,4 @@ update(demo_t *demo)
 
     wait_for_device(demo);
 }
+#endif

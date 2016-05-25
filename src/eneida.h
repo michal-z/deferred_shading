@@ -4,7 +4,9 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <d3d12.h>
+#include <dxgi1_4.h>
 
+const uint32_t kNumBufferedFrames = 3;
 #define k_swap_buffer_count 4
 #define k_demo_name "eneida"
 #define k_demo_resx 1024
@@ -13,41 +15,46 @@
 
 #define SAFE_RELEASE(x) if ((x)) { (x)->Release(); (x) = nullptr; }
 
-struct descriptor_heap_t
+class TGuiRenderer;
+class TDemo
 {
-    ID3D12DescriptorHeap *heap;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu_handle;
-    D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle;
-};
+public:
+    ~TDemo();
+    bool init();
+    void update();
 
-struct demo_t
-{
-    int swap_buffer_index;
-    int resolution[2];
-    double time;
-    float time_delta;
-    HWND hwnd;
-    IDXGIFactory *dxgi_factory;
-    IDXGISwapChain *dxgi_swap_chain;
-    ID3D12Device *device;
-    ID3D12CommandQueue *cmd_queue;
-    ID3D12CommandAllocator *cmd_allocator;
-    ID3D12GraphicsCommandList *cmd_list;
-    ID3D12RootSignature *root_signature;
-    descriptor_heap_t rtv_dh;
-    descriptor_heap_t cbv_srv_uav_dh;
-    UINT rtv_dh_size;
-    UINT cbv_srv_uav_dh_size;
-    ID3D12Resource *swap_buffer[k_swap_buffer_count];
-    D3D12_VIEWPORT viewport;
-    D3D12_RECT scissor_rect;
-    ID3D12PipelineState *pso;
-    ID3D12Fence *fence;
-    UINT64 fence_value;
-    HANDLE fence_event;
-    ID3D12Resource *constant_buffer;
-};
+    uint32_t BackBufferIndex;
+    int Resolution[2];
+    double Time;
+    float TimeDelta;
 
-bool init(demo_t *demo);
-void deinit(demo_t *demo);
-void update(demo_t *demo);
+
+private:
+    HWND WinHandle;
+    IDXGIFactory *FactoryDXGI;
+    IDXGISwapChain3 *SwapChain;
+    ID3D12Device *Device;
+
+    ID3D12CommandQueue *CmdQueue;
+    ID3D12CommandAllocator *CmdAllocator[kNumBufferedFrames];
+    ID3D12GraphicsCommandList *CmdList;
+
+    ID3D12DescriptorHeap *SwapBuffersHeap;
+    ID3D12Resource *SwapBuffers[k_swap_buffer_count];
+    UINT DescriptorSize;
+    UINT DescriptorSizeRTV;
+
+    D3D12_VIEWPORT Viewport;
+    D3D12_RECT ScissorRect;
+
+    UINT64 CpuCompletedFrames;
+    ID3D12Fence *FrameFence;
+    HANDLE FrameFenceEvent;
+
+    TGuiRenderer *GuiRenderer;
+
+
+    static LRESULT CALLBACK winproc(HWND win, UINT msg, WPARAM wparam, LPARAM lparam);
+    void updateFrameStats();
+    bool initWindowAndD3D12();
+};
