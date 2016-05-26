@@ -11,8 +11,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\eneida.cpp" />
-    <ClCompile Include="..\src\eneida_demo.cpp" />
+    <ClCompile Include="..\src\demo.cpp" />
+    <ClCompile Include="..\src\demo_imgui_renderer.cpp" />
+    <ClCompile Include="..\src\demo_lib.cpp" />
+    <ClCompile Include="..\src\imgui.cpp" />
+    <ClCompile Include="..\src\imgui_demo.cpp" />
+    <ClCompile Include="..\src\imgui_draw.cpp" />
     <ClCompile Include="..\src\EASTL\source\assert.cpp" />
     <ClCompile Include="..\src\EASTL\source\allocator_eastl.cpp" />
     <ClCompile Include="..\src\EASTL\source\fixed_pool.cpp" />
@@ -24,24 +28,28 @@
     <ClCompile Include="..\src\EASTL\source\thread_support.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\eneida.h" />
+    <ClInclude Include="..\src\demo.h" />
+    <ClInclude Include="..\src\demo_imgui_renderer.h" />
+    <ClInclude Include="..\src\demo_lib.h" />
+    <ClInclude Include="..\src\imgui.h" />
+    <ClInclude Include="..\src\imgui_internal.h" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="..\src\hlsl\eneida.hlsl">
+    <FxCompile Include="..\src\hlsl\imgui.hlsl">
       <ShaderType>Vertex</ShaderType>
-      <EntryPointName>vs_full_triangle</EntryPointName>
-      <ObjectFileOutput>$(OutDir)data\shader\vs_full_triangle.cso</ObjectFileOutput>
+      <EntryPointName>VSImgui</EntryPointName>
+      <ObjectFileOutput>$(OutDir)data\shader\vs_imgui.cso</ObjectFileOutput>
     </FxCompile>
-    <FxCompile Include="..\src\hlsl\eneida.hlsl">
+    <FxCompile Include="..\src\hlsl\imgui.hlsl">
       <ShaderType>Pixel</ShaderType>
-      <EntryPointName>ps_sketch0</EntryPointName>
-      <ObjectFileOutput>$(OutDir)data\shader\ps_sketch0.cso</ObjectFileOutput>
+      <EntryPointName>PSImgui</EntryPointName>
+      <ObjectFileOutput>$(OutDir)data\shader\ps_imgui.cso</ObjectFileOutput>
     </FxCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{35CB1ABC-4FDE-4F4E-B423-B2286C11041B}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>eneida</RootNamespace>
+    <RootNamespace>deferred_shading</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.10586.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
