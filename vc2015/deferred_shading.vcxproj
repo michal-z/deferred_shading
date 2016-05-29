@@ -14,9 +14,9 @@
     <ClCompile Include="..\src\demo.cpp" />
     <ClCompile Include="..\src\demo_imgui_renderer.cpp" />
     <ClCompile Include="..\src\demo_lib.cpp" />
-    <ClCompile Include="..\src\imgui.cpp" />
-    <ClCompile Include="..\src\imgui_demo.cpp" />
-    <ClCompile Include="..\src\imgui_draw.cpp" />
+    <ClCompile Include="..\src\imgui\imgui.cpp" />
+    <ClCompile Include="..\src\imgui\imgui_demo.cpp" />
+    <ClCompile Include="..\src\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\src\EASTL\source\assert.cpp" />
     <ClCompile Include="..\src\EASTL\source\allocator_eastl.cpp" />
     <ClCompile Include="..\src\EASTL\source\fixed_pool.cpp" />
@@ -31,18 +31,18 @@
     <ClInclude Include="..\src\demo.h" />
     <ClInclude Include="..\src\demo_imgui_renderer.h" />
     <ClInclude Include="..\src\demo_lib.h" />
-    <ClInclude Include="..\src\imgui.h" />
-    <ClInclude Include="..\src\imgui_internal.h" />
+    <ClInclude Include="..\src\imgui\imgui.h" />
+    <ClInclude Include="..\src\imgui\imgui_internal.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\src\hlsl\imgui.hlsl">
       <ShaderType>Vertex</ShaderType>
-      <EntryPointName>VSImgui</EntryPointName>
+      <EntryPointName>VsImgui</EntryPointName>
       <ObjectFileOutput>$(OutDir)data\shader\vs_imgui.cso</ObjectFileOutput>
     </FxCompile>
     <FxCompile Include="..\src\hlsl\imgui.hlsl">
       <ShaderType>Pixel</ShaderType>
-      <EntryPointName>PSImgui</EntryPointName>
+      <EntryPointName>PsImgui</EntryPointName>
       <ObjectFileOutput>$(OutDir)data\shader\ps_imgui.cso</ObjectFileOutput>
     </FxCompile>
   </ItemGroup>
@@ -93,7 +93,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\src;..\src\imgui</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4530;4577</DisableSpecificWarnings>
@@ -117,7 +117,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>..\src</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\src;..\src\imgui</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <ExceptionHandling>false</ExceptionHandling>
       <DisableSpecificWarnings>4530;4577</DisableSpecificWarnings>
