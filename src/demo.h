@@ -1,18 +1,12 @@
 #pragma once
 
-#include <stdint.h>
-#include <assert.h>
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <d3d12.h>
-#include <dxgi1_4.h>
+#include "demo_common.h"
 
 const uint32_t kNumBufferedFrames = 3;
 const uint32_t kNumSwapBuffers = 4;
 const char *kDemoName = "Deferred Shading Demo";
 const uint32_t kDemoResX = 1024;
 const uint32_t kDemoResY = 1024;
-
 
 class CGuiRenderer;
 class CDemo

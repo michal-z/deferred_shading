@@ -1,9 +1,6 @@
 #include "demo_lib.h"
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
 
-uint8_t *DLib::LoadFile(const char *filename, size_t *filesize)
+uint8_t *Lib::LoadFile(const char *filename, size_t *filesize)
 {
     if (!filename || !filesize) return nullptr;
 
@@ -33,7 +30,7 @@ uint8_t *DLib::LoadFile(const char *filename, size_t *filesize)
     return data;
 }
 
-double DLib::GetTime()
+double Lib::GetTime()
 {
     static LARGE_INTEGER freq = {};
     static LARGE_INTEGER counter0 = {};
@@ -46,4 +43,25 @@ double DLib::GetTime()
     LARGE_INTEGER counter;
     QueryPerformanceCounter(&counter);
     return (counter.QuadPart - counter0.QuadPart) / (double)freq.QuadPart;
+}
+
+ID3D12Resource *Lib::CreateUploadBuffer(ID3D12Device *device, uint64_t bufferSize)
+{
+    assert(device);
+
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+    D3D12_RESOURCE_DESC bufferDesc = {};
+    bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    bufferDesc.Width = bufferSize;
+    bufferDesc.Height = bufferDesc.DepthOrArraySize = bufferDesc.MipLevels = 1;
+    bufferDesc.SampleDesc.Count = 1;
+    bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+    ID3D12Resource *uploadBuffer = nullptr;
+    device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+                                    D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                    IID_PPV_ARGS(&uploadBuffer));
+    return uploadBuffer;
 }

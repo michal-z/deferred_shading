@@ -187,11 +187,11 @@ void CDemo::UpdateFrameStats()
 
     if (prevTime < 0.0)
     {
-        prevTime = DLib::GetTime();
+        prevTime = Lib::GetTime();
         prevFpsTime = prevTime;
     }
 
-    Time = DLib::GetTime();
+    Time = Lib::GetTime();
     TimeDelta = (float)(Time - prevTime);
     prevTime = Time;
 
@@ -337,9 +337,10 @@ bool CDemo::InitWindowAndD3D12()
                                     nullptr, IID_PPV_ARGS(&CmdList));
     if (FAILED(res)) return false;
 
+    eastl::vector<ID3D12Resource *> uploadBuffers;
 
     GuiRenderer = new CGuiRenderer{};
-    if (!GuiRenderer->Init(CmdList, kNumBufferedFrames)) return false;
+    if (!GuiRenderer->Init(CmdList, kNumBufferedFrames, &uploadBuffers)) return false;
 
 
     CmdList->Close();
@@ -350,6 +351,10 @@ bool CDemo::InitWindowAndD3D12()
     FrameFence->SetEventOnCompletion(0, FrameFenceEvent);
     WaitForSingleObject(FrameFenceEvent, INFINITE);
 
+    for (size_t i = 0; i < uploadBuffers.size(); ++i)
+    {
+        uploadBuffers[i]->Release();
+    }
     return true;
 }
 

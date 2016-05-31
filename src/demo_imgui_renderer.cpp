@@ -14,8 +14,8 @@ bool CGuiRenderer::CompileShaders()
     };
 
     size_t vsSize, psSize;
-    const uint8_t *vsCode = DLib::LoadFile("data/shader/vs_imgui.cso", &vsSize);
-    const uint8_t *psCode = DLib::LoadFile("data/shader/ps_imgui.cso", &psSize);
+    const uint8_t *vsCode = Lib::LoadFile("data/shader/vs_imgui.cso", &vsSize);
+    const uint8_t *psCode = Lib::LoadFile("data/shader/ps_imgui.cso", &psSize);
     assert(vsCode && psCode);
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
@@ -48,9 +48,10 @@ bool CGuiRenderer::CompileShaders()
     return true;
 }
 
-bool CGuiRenderer::Init(ID3D12GraphicsCommandList *cmdList, uint32_t numBufferedFrames)
+bool CGuiRenderer::Init(ID3D12GraphicsCommandList *cmdList, uint32_t numBufferedFrames,
+                        eastl::vector<ID3D12Resource *> *uploadBuffers)
 {
-    assert(cmdList && Device == nullptr);
+    assert(cmdList && !Device && uploadBuffers);
 
     HRESULT hr = cmdList->GetDevice(IID_PPV_ARGS(&Device));
     if (FAILED(hr)) return false;
@@ -68,7 +69,7 @@ bool CGuiRenderer::Init(ID3D12GraphicsCommandList *cmdList, uint32_t numBuffered
     {
         ImGuiIO &io = ImGui::GetIO();
 
-        unsigned char *pixels;
+        uint8_t *pixels;
         int width, height;
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
 
@@ -89,9 +90,9 @@ bool CGuiRenderer::Init(ID3D12GraphicsCommandList *cmdList, uint32_t numBuffered
         if (FAILED(hr)) return false;
 
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
-        UINT numRows;
-        UINT64 rowSize;
-        UINT64 bufferSize;
+        uint32_t numRows;
+        uint64_t rowSize;
+        uint64_t bufferSize;
         Device->GetCopyableFootprints(&textureDesc, 0, 1, 0, &layout, &numRows, &rowSize, &bufferSize);
 
 
@@ -103,19 +104,22 @@ bool CGuiRenderer::Init(ID3D12GraphicsCommandList *cmdList, uint32_t numBuffered
         bufferDesc.Height = bufferDesc.DepthOrArraySize = bufferDesc.MipLevels = 1;
         bufferDesc.SampleDesc.Count = 1;
         bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+        ID3D12Resource *fontUploadBuffer;
         hr = Device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
                                              D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                             IID_PPV_ARGS(&FontIntermBuffer));
+                                             IID_PPV_ARGS(&fontUploadBuffer));
         if (FAILED(hr)) return false;
+        uploadBuffers->push_back(fontUploadBuffer);
 
         D3D12_RANGE range = {};
         uint8_t *ptr;
-        FontIntermBuffer->Map(0, &range, (void **)&ptr);
-        for (UINT row = 0; row < numRows; ++row)
+        fontUploadBuffer->Map(0, &range, (void **)&ptr);
+        for (uint32_t row = 0; row < numRows; ++row)
         {
             memcpy(ptr + row * rowSize, pixels + row * width * 4, width * 4);
         }
-        FontIntermBuffer->Unmap(0, nullptr);
+        fontUploadBuffer->Unmap(0, nullptr);
 
         D3D12_TEXTURE_COPY_LOCATION copyDst = {};
         copyDst.pResource = FontTex;
@@ -123,7 +127,7 @@ bool CGuiRenderer::Init(ID3D12GraphicsCommandList *cmdList, uint32_t numBuffered
         copyDst.SubresourceIndex = 0;
 
         D3D12_TEXTURE_COPY_LOCATION copySrc = {};
-        copySrc.pResource = FontIntermBuffer;
+        copySrc.pResource = fontUploadBuffer;
         copySrc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         copySrc.PlacedFootprint = layout;
         cmdList->CopyTextureRegion(&copyDst, 0, 0, 0, &copySrc, nullptr);
@@ -223,7 +227,6 @@ CGuiRenderer::~CGuiRenderer()
 
     SAFE_RELEASE(Device);
     SAFE_RELEASE(DescriptorHeap);
-    SAFE_RELEASE(FontIntermBuffer);
     SAFE_RELEASE(FontTex);
     SAFE_RELEASE(Pso);
     SAFE_RELEASE(RootSignature);
@@ -239,8 +242,6 @@ CGuiRenderer::~CGuiRenderer()
 bool CGuiRenderer::Render(ID3D12GraphicsCommandList *cmdList, uint32_t frameIndex)
 {
     assert(cmdList && frameIndex < NumBufferedFrames);
-
-    SAFE_RELEASE(FontIntermBuffer);
 
     ImGui::Render();
 
