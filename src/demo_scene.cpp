@@ -14,7 +14,6 @@ bool CScene::Load(const char *meshFile, const char *imageFolder,
 {
     assert(meshFile && imageFolder && cmdList && uploadBuffers);
 
-
     Assimp::Importer sceneImporter;
     sceneImporter.SetPropertyInteger(AI_CONFIG_PP_PTV_NORMALIZE, 1);
 
@@ -28,6 +27,35 @@ bool CScene::Load(const char *meshFile, const char *imageFolder,
 
     importedScene = sceneImporter.ApplyPostProcessing(ppFlags);
 
+    if (!LoadGeometry(importedScene, cmdList, uploadBuffers)) return false;
+
+    return true;
+}
+
+void CScene::Render(ID3D12GraphicsCommandList *cmdList)
+{
+    assert(cmdList);
+    assert(VertexBuffer);
+    assert(IndexBuffer);
+
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmdList->IASetVertexBuffers(0, 1, &VertexBufferView);
+    cmdList->IASetIndexBuffer(&IndexBufferView);
+
+    uint32_t startIndex = 0;
+    int32_t baseVertex = 0;
+
+    for (size_t i = 0; i < MeshSections.size(); ++i)
+    {
+        cmdList->DrawIndexedInstanced(MeshSections[i].NumIndices, 1, startIndex, baseVertex, 0);
+        startIndex += MeshSections[i].NumIndices;
+        baseVertex += MeshSections[i].NumVertices;
+    }
+}
+
+bool CScene::LoadGeometry(const aiScene *importedScene, ID3D12GraphicsCommandList *cmdList,
+                          eastl::vector<ID3D12Resource *> *uploadBuffers)
+{
     MeshSections.resize(importedScene->mNumMeshes);
 
     uint32_t totalNumVertices = 0;
@@ -64,6 +92,7 @@ bool CScene::Load(const char *meshFile, const char *imageFolder,
     for (size_t m = 0; m < MeshSections.size(); ++m)
     {
         aiMesh *mesh = importedScene->mMeshes[m];
+        /*
         aiMaterial *mat = importedScene->mMaterials[mesh->mMaterialIndex];
 
         aiString path;
@@ -72,6 +101,7 @@ bool CScene::Load(const char *meshFile, const char *imageFolder,
         char fullPath[256];
         strcpy(fullPath, imageFolder);
         strcat(fullPath, path.data);
+        */
 
         for (uint32_t v = 0; v < mesh->mNumVertices; ++v)
         {
@@ -143,9 +173,29 @@ bool CScene::Load(const char *meshFile, const char *imageFolder,
                                          IID_PPV_ARGS(&IndexBuffer));
     if (FAILED(hr)) return false;
 
-    return true;
-}
+    cmdList->CopyBufferRegion(VertexBuffer, 0, uploadVBuf, 0, totalNumVertices * sizeof(SMeshVertex));
+    cmdList->CopyBufferRegion(IndexBuffer, 0, uploadIBuf, 0, totalNumIndices * sizeof(SMeshIndex));
 
-void CScene::Render()
-{
+    D3D12_RESOURCE_BARRIER barrier[2] = {};
+    barrier[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier[0].Transition.pResource = VertexBuffer;
+    barrier[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barrier[0].Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+
+    barrier[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier[1].Transition.pResource = IndexBuffer;
+    barrier[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barrier[1].Transition.StateAfter = D3D12_RESOURCE_STATE_INDEX_BUFFER;
+
+    cmdList->ResourceBarrier(_countof(barrier), barrier);
+
+    VertexBufferView.BufferLocation = VertexBuffer->GetGPUVirtualAddress();
+    VertexBufferView.StrideInBytes = sizeof(SMeshVertex);
+    VertexBufferView.SizeInBytes = totalNumVertices * sizeof(SMeshVertex);
+
+    IndexBufferView.BufferLocation = IndexBuffer->GetGPUVirtualAddress();
+    IndexBufferView.Format = sizeof(SMeshIndex) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+    IndexBufferView.SizeInBytes = totalNumIndices * sizeof(SMeshIndex);
+
+    return true;
 }

@@ -1,8 +1,8 @@
 ﻿#include "demo.h"
 #include <new>
 #include "EABase/eabase.h"
-#include "EASTL/vector.h"
 #include "demo_imgui_renderer.h"
+#include "demo_scene.h"
 #include "demo_lib.h"
 #include "imgui.h"
 
@@ -28,6 +28,7 @@ CDemo::~CDemo()
         WaitForSingleObject(FrameFenceEvent, INFINITE);
     }
 
+    delete Scene;
     delete GuiRenderer;
 
     if (FrameFenceEvent)
@@ -79,9 +80,10 @@ void CDemo::Render()
 {
     assert(CmdList);
 
-    CmdAllocator[FrameIndex]->Reset();
+    SFrameResources *fres = &FrameResources[FrameIndex];
+    fres->CmdAllocator->Reset();
 
-    CmdList->Reset(CmdAllocator[FrameIndex], nullptr);
+    CmdList->Reset(fres->CmdAllocator, nullptr);
     CmdList->RSSetViewports(1, &Viewport);
     CmdList->RSSetScissorRects(1, &ScissorRect);
 
@@ -293,6 +295,7 @@ bool CDemo::InitWindowAndD3D12()
     if (FAILED(res)) return false;
 
     BackBufferIndex = SwapChain->GetCurrentBackBufferIndex();
+    FrameIndex = 0;
 
     DescriptorSizeRTV = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     DescriptorSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -321,7 +324,7 @@ bool CDemo::InitWindowAndD3D12()
     Viewport = { 0.0f, 0.0f, (float)Resolution[0], (float)Resolution[1], 0.0f, 1.0f };
     ScissorRect = { 0, 0, (LONG)Resolution[0], (LONG)Resolution[1] };
 
-    res = Device->CreateFence(1, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&FrameFence));
+    res = Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&FrameFence));
     if (FAILED(res)) return false;
 
     FrameFenceEvent = CreateEventEx(nullptr, nullptr, 0, EVENT_ALL_ACCESS);
@@ -329,11 +332,12 @@ bool CDemo::InitWindowAndD3D12()
 
     for (uint32_t i = 0; i < kNumBufferedFrames; ++i)
     {
-        Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&CmdAllocator[i]));
+        Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                                       IID_PPV_ARGS(&FrameResources[i].CmdAllocator));
         if (FAILED(res)) return false;
     }
 
-    res = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, CmdAllocator[0],
+    res = Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, FrameResources[0].CmdAllocator,
                                     nullptr, IID_PPV_ARGS(&CmdList));
     if (FAILED(res)) return false;
 
@@ -342,13 +346,16 @@ bool CDemo::InitWindowAndD3D12()
     GuiRenderer = new CGuiRenderer{};
     if (!GuiRenderer->Init(CmdList, kNumBufferedFrames, &uploadBuffers)) return false;
 
+    Scene = new CScene{};
+    if (!Scene->Load("data/sponza/Sponza.fbx", "data/sponza/", CmdList, &uploadBuffers)) return false;
+
 
     CmdList->Close();
     ID3D12CommandList *cmdLists[] = { (ID3D12CommandList *)CmdList };
     CmdQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
 
-    CmdQueue->Signal(FrameFence, 0);
-    FrameFence->SetEventOnCompletion(0, FrameFenceEvent);
+    CmdQueue->Signal(FrameFence, ++CpuCompletedFrames);
+    FrameFence->SetEventOnCompletion(CpuCompletedFrames, FrameFenceEvent);
     WaitForSingleObject(FrameFenceEvent, INFINITE);
 
     for (size_t i = 0; i < uploadBuffers.size(); ++i)

@@ -2,6 +2,8 @@
 
 #include "demo_common.h"
 
+struct aiScene;
+
 class CScene
 {
 public:
@@ -9,7 +11,7 @@ public:
     bool Load(const char *meshFile, const char *imageFolder,
               ID3D12GraphicsCommandList *cmdList,
               eastl::vector<ID3D12Resource *> *uploadBuffers);
-    void Render();
+    void Render(ID3D12GraphicsCommandList *cmdList);
 
 private:
     struct SMeshVertex
@@ -32,4 +34,9 @@ private:
 
     ID3D12Resource *VertexBuffer = nullptr;
     ID3D12Resource *IndexBuffer = nullptr;
+    D3D12_VERTEX_BUFFER_VIEW VertexBufferView = {};
+    D3D12_INDEX_BUFFER_VIEW IndexBufferView = {};
+
+    bool LoadGeometry(const aiScene *scene, ID3D12GraphicsCommandList *cmdList,
+                      eastl::vector<ID3D12Resource *> *uploadBuffers);
 };

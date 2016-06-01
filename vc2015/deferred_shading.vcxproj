@@ -47,6 +47,16 @@
       <EntryPointName>PsImgui</EntryPointName>
       <ObjectFileOutput>$(OutDir)data\shader\ps_imgui.cso</ObjectFileOutput>
     </FxCompile>
+    <FxCompile Include="..\src\hlsl\scene.hlsl">
+      <ShaderType>Vertex</ShaderType>
+      <EntryPointName>VsScene</EntryPointName>
+      <ObjectFileOutput>$(OutDir)data\shader\vs_scene.cso</ObjectFileOutput>
+    </FxCompile>
+    <FxCompile Include="..\src\hlsl\scene.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <EntryPointName>PsScene</EntryPointName>
+      <ObjectFileOutput>$(OutDir)data\shader\ps_scene.cso</ObjectFileOutput>
+    </FxCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{35CB1ABC-4FDE-4F4E-B423-B2286C11041B}</ProjectGuid>
