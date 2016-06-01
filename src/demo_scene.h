@@ -7,6 +7,8 @@ struct aiScene;
 class CScene
 {
 public:
+    ID3D12RootSignature *RootSignature;
+
     ~CScene();
     bool Load(const char *meshFile, const char *imageFolder,
               ID3D12GraphicsCommandList *cmdList,
@@ -32,6 +34,7 @@ private:
     };
     eastl::vector<SMeshSection> MeshSections;
 
+    ID3D12Device *Device = nullptr;
     ID3D12Resource *VertexBuffer = nullptr;
     ID3D12Resource *IndexBuffer = nullptr;
     D3D12_VERTEX_BUFFER_VIEW VertexBufferView = {};

@@ -14,6 +14,9 @@ bool CScene::Load(const char *meshFile, const char *imageFolder,
 {
     assert(meshFile && imageFolder && cmdList && uploadBuffers);
 
+    cmdList->GetDevice(IID_PPV_ARGS(&Device));
+    assert(Device);
+
     Assimp::Importer sceneImporter;
     sceneImporter.SetPropertyInteger(AI_CONFIG_PP_PTV_NORMALIZE, 1);
 
@@ -27,7 +30,20 @@ bool CScene::Load(const char *meshFile, const char *imageFolder,
 
     importedScene = sceneImporter.ApplyPostProcessing(ppFlags);
 
+
     if (!LoadGeometry(importedScene, cmdList, uploadBuffers)) return false;
+
+    // root signature
+    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    ID3DBlob *blob = nullptr;
+    HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+                                             &blob, nullptr);
+    hr |= Device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                      IID_PPV_ARGS(&RootSignature));
+    SAFE_RELEASE(blob);
+    if (FAILED(hr)) return false;
 
     return true;
 }
@@ -70,15 +86,11 @@ bool CScene::LoadGeometry(const aiScene *importedScene, ID3D12GraphicsCommandLis
         totalNumIndices += MeshSections[i].NumIndices;
     }
 
-    ID3D12Device *device;
-    cmdList->GetDevice(IID_PPV_ARGS(&device));
-    assert(device);
-
-    ID3D12Resource *uploadVBuf = Lib::CreateUploadBuffer(device, totalNumVertices * sizeof(SMeshVertex));
+    ID3D12Resource *uploadVBuf = Lib::CreateUploadBuffer(Device, totalNumVertices * sizeof(SMeshVertex));
     if (!uploadVBuf) return false;
     uploadBuffers->push_back(uploadVBuf);
 
-    ID3D12Resource *uploadIBuf = Lib::CreateUploadBuffer(device, totalNumIndices * sizeof(SMeshIndex));
+    ID3D12Resource *uploadIBuf = Lib::CreateUploadBuffer(Device, totalNumIndices * sizeof(SMeshIndex));
     if (!uploadIBuf) return false;
     uploadBuffers->push_back(uploadIBuf);
 
@@ -162,13 +174,13 @@ bool CScene::LoadGeometry(const aiScene *importedScene, ID3D12GraphicsCommandLis
     bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
     bufferDesc.Width = totalNumVertices * sizeof(SMeshVertex);
-    hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+    hr = Device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
                                          D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
                                          IID_PPV_ARGS(&VertexBuffer));
     if (FAILED(hr)) return false;
 
     bufferDesc.Width = totalNumIndices * sizeof(SMeshIndex);
-    hr = device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+    hr = Device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
                                          D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
                                          IID_PPV_ARGS(&IndexBuffer));
     if (FAILED(hr)) return false;
