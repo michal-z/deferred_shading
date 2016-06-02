@@ -43,12 +43,58 @@ CDemo::~CDemo()
 
 bool CDemo::Init()
 {
-    return InitWindowAndD3D12();
+    if (!InitWindowAndD3D12()) return false;
+
+
+    HRESULT hr;
+
+    hr = Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, FrameResources[0].CmdAllocator,
+                                   nullptr, IID_PPV_ARGS(&CmdList));
+    if (FAILED(hr)) return false;
+
+    eastl::vector<ID3D12Resource *> uploadBuffers;
+
+    GuiRenderer = new CGuiRenderer{};
+    if (!GuiRenderer->Init(CmdList, kNumBufferedFrames, &uploadBuffers)) return false;
+
+    Scene = new CScene{};
+    if (!Scene->Load("data/sponza/Sponza.fbx", "data/sponza/", CmdList, &uploadBuffers)) return false;
+
+    CmdList->Close();
+    ID3D12CommandList *cmdLists[] = { (ID3D12CommandList *)CmdList };
+    CmdQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
+
+    CmdQueue->Signal(FrameFence, ++CpuCompletedFrames);
+    FrameFence->SetEventOnCompletion(CpuCompletedFrames, FrameFenceEvent);
+    WaitForSingleObject(FrameFenceEvent, INFINITE);
+
+    for (size_t i = 0; i < uploadBuffers.size(); ++i)
+    {
+        uploadBuffers[i]->Release();
+    }
+
+
+    if (!InitRootSignatures()) return false;
+    if (!InitPipelineStates()) return false;
+    if (!InitConstantBuffers()) return false;
+
+    return true;
 }
 
 void CDemo::Update()
 {
     UpdateFrameStats();
+
+    float sinv, cosv;
+    XMScalarSinCos(&sinv, &cosv, (float)(0.25 * Time));
+
+    XMMATRIX viewproj = XMMatrixLookAtLH(XMVectorSet(18.0f*cosv, 2.0f, -18.0f*sinv, 1.0f),
+                                         XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f),
+                                         XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f)) *
+        XMMatrixPerspectiveFovLH(XM_PI / 3, (float)Resolution[0] / Resolution[1], 0.1f, 100.0f);
+
+    XMStoreFloat4x4A((XMFLOAT4X4A *)FrameResources[FrameIndex].PerFrameCbPtr,
+                     XMMatrixTranspose(viewproj));
 
     ImGuiIO &io = ImGui::GetIO();
     io.KeyCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
@@ -73,7 +119,7 @@ void CDemo::Update()
     }
 
     BackBufferIndex = SwapChain->GetCurrentBackBufferIndex();
-    FrameIndex = (uint32_t)(CpuCompletedFrames % kNumBufferedFrames);
+    FrameIndex = (uint32_t)(++FrameIndex % kNumBufferedFrames);
 }
 
 void CDemo::Render()
@@ -102,8 +148,12 @@ void CDemo::Render()
     CmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
     CmdList->OMSetRenderTargets(1, &rtvHandle, TRUE, nullptr);
 
-    ImGui::ShowTestWindow();
+    CmdList->SetPipelineState(ScenePso);
+    CmdList->SetGraphicsRootSignature(StaticMeshRs);
+    CmdList->SetGraphicsRootConstantBufferView(0, fres->PerFrameCb->GetGPUVirtualAddress());
+    Scene->Render(CmdList);
 
+    ImGui::ShowTestWindow();
     GuiRenderer->Render(CmdList, FrameIndex);
 
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -337,31 +387,107 @@ bool CDemo::InitWindowAndD3D12()
         if (FAILED(res)) return false;
     }
 
-    res = Device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, FrameResources[0].CmdAllocator,
-                                    nullptr, IID_PPV_ARGS(&CmdList));
-    if (FAILED(res)) return false;
+    return true;
+}
 
-    eastl::vector<ID3D12Resource *> uploadBuffers;
+bool CDemo::InitRootSignatures()
+{
+    HRESULT hr;
 
-    GuiRenderer = new CGuiRenderer{};
-    if (!GuiRenderer->Init(CmdList, kNumBufferedFrames, &uploadBuffers)) return false;
-
-    Scene = new CScene{};
-    if (!Scene->Load("data/sponza/Sponza.fbx", "data/sponza/", CmdList, &uploadBuffers)) return false;
-
-
-    CmdList->Close();
-    ID3D12CommandList *cmdLists[] = { (ID3D12CommandList *)CmdList };
-    CmdQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
-
-    CmdQueue->Signal(FrameFence, ++CpuCompletedFrames);
-    FrameFence->SetEventOnCompletion(CpuCompletedFrames, FrameFenceEvent);
-    WaitForSingleObject(FrameFenceEvent, INFINITE);
-
-    for (size_t i = 0; i < uploadBuffers.size(); ++i)
+    // static mesh root signature
     {
-        uploadBuffers[i]->Release();
+        D3D12_ROOT_PARAMETER param[1] = {};
+        param[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        param[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        param[0].Descriptor.ShaderRegister = 0;
+
+        D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+        rootSignatureDesc.NumParameters = _countof(param);
+        rootSignatureDesc.pParameters = param;
+        rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+        ID3DBlob *blob = nullptr;
+        hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+                                         &blob, nullptr);
+        hr |= Device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                          IID_PPV_ARGS(&StaticMeshRs));
+        SAFE_RELEASE(blob);
+        if (FAILED(hr)) return false;
     }
+
+    return true;
+}
+
+bool CDemo::InitPipelineStates()
+{
+    HRESULT hr;
+
+    // scene pso
+    {
+        D3D12_INPUT_ELEMENT_DESC descInputLayout[] =
+        {
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "BITANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        };
+
+        size_t vsSize, psSize;
+        const uint8_t *vsCode = Lib::LoadFile("data/shader/vs_scene.cso", &vsSize);
+        const uint8_t *psCode = Lib::LoadFile("data/shader/ps_scene.cso", &psSize);
+        assert(vsCode && psCode);
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
+        desc.InputLayout = { descInputLayout, _countof(descInputLayout) };
+        desc.pRootSignature = StaticMeshRs;
+        desc.VS = { vsCode, vsSize };
+        desc.PS = { psCode, psSize };
+        desc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+        desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        desc.SampleMask = UINT_MAX;
+        desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets = 1;
+        desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count = 1;
+
+        hr = Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&ScenePso));
+        if (FAILED(hr)) return false;
+    }
+
+    return true;
+}
+
+bool CDemo::InitConstantBuffers()
+{
+    HRESULT hr;
+
+    for (uint32_t i = 0; i < kNumBufferedFrames; ++i)
+    {
+        SFrameResources *res = &FrameResources[i];
+
+        // constant buffer
+        D3D12_HEAP_PROPERTIES heapProps = {};
+        heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+        D3D12_RESOURCE_DESC resourceDesc = {};
+        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        resourceDesc.Width = 64;
+        resourceDesc.Height = resourceDesc.DepthOrArraySize = resourceDesc.MipLevels = 1;
+        resourceDesc.SampleDesc.Count = 1;
+        resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+        hr = Device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+                                             D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                             IID_PPV_ARGS(&res->PerFrameCb));
+        if (FAILED(hr)) return false;
+
+        D3D12_RANGE range = {};
+        hr = res->PerFrameCb->Map(0, &range, &res->PerFrameCbPtr);
+        if (FAILED(hr)) return false;
+    }
+
     return true;
 }
 

@@ -5,8 +5,8 @@
 const uint32_t kNumBufferedFrames = 3;
 const uint32_t kNumSwapBuffers = 4;
 const char *kDemoName = "Deferred Shading Demo";
-const uint32_t kDemoResX = 1024;
-const uint32_t kDemoResY = 1024;
+const uint32_t kDemoResX = 1280;
+const uint32_t kDemoResY = 720;
 
 class CGuiRenderer;
 class CScene;
@@ -28,7 +28,8 @@ private:
     struct SFrameResources
     {
         ID3D12CommandAllocator *CmdAllocator = nullptr;
-        ID3D12Resource *PerFrameCB = nullptr;
+        ID3D12Resource *PerFrameCb = nullptr;
+        void *PerFrameCbPtr;
     };
     SFrameResources FrameResources[kNumBufferedFrames];
 
@@ -45,6 +46,9 @@ private:
     uint32_t DescriptorSize;
     uint32_t DescriptorSizeRTV;
 
+    ID3D12RootSignature *StaticMeshRs = nullptr;
+    ID3D12PipelineState *ScenePso = nullptr;
+
     D3D12_VIEWPORT Viewport;
     D3D12_RECT ScissorRect;
 
@@ -59,4 +63,7 @@ private:
     static LRESULT CALLBACK Winproc(HWND win, UINT msg, WPARAM wparam, LPARAM lparam);
     void UpdateFrameStats();
     bool InitWindowAndD3D12();
+    bool InitRootSignatures();
+    bool InitPipelineStates();
+    bool InitConstantBuffers();
 };
