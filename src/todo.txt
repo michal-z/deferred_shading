@@ -1,0 +1,3 @@
+[ ] load and display textures
+[ ] generate mipmaps in the compute shader
+[ ] implement camera movement
