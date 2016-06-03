@@ -1,4 +1,8 @@
-struct VsInput
+#define RootSig \
+    "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+    "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX)"
+
+struct Input
 {
     float3 Position : POSITION;
     float3 Normal : NORMAL;
@@ -7,7 +11,7 @@ struct VsInput
     float3 Bitangent : BITANGENT;
 };
 
-struct VsOutput
+struct Output
 {
     float4 Position : SV_Position;
     float2 Texcoord : TEXCOORD;
@@ -19,18 +23,13 @@ struct SPerFrame
 };
 ConstantBuffer<SPerFrame> CbvPerFrame : register(b0);
 
-VsOutput VsScene(VsInput i)
+[RootSignature(RootSig)]
+Output main(Input i)
 {
-    VsOutput o;
+    Output o;
     o.Position = mul(float4(i.Position, 1.0f), CbvPerFrame.ViewProjMat);
     o.Texcoord = i.Texcoord;
     return o;
-}
-
-
-float4 PsScene(VsOutput i) : SV_Target0
-{
-    return float4(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 // vim: cindent ft= :

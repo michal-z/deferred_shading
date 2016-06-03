@@ -14,8 +14,8 @@ bool CGuiRenderer::CompileShaders()
     };
 
     size_t vsSize, psSize;
-    const uint8_t *vsCode = Lib::LoadFile("data/shader/vs_imgui.cso", &vsSize);
-    const uint8_t *psCode = Lib::LoadFile("data/shader/ps_imgui.cso", &psSize);
+    const uint8_t *vsCode = Lib::LoadFile("data/shader/imgui_vs.cso", &vsSize);
+    const uint8_t *psCode = Lib::LoadFile("data/shader/imgui_ps.cso", &psSize);
     assert(vsCode && psCode);
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};

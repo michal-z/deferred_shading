@@ -37,25 +37,17 @@
     <ClInclude Include="..\src\imgui\imgui_internal.h" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="..\src\hlsl\imgui.hlsl">
+    <FxCompile Include="..\src\hlsl\imgui_vs.hlsl">
       <ShaderType>Vertex</ShaderType>
-      <EntryPointName>VsImgui</EntryPointName>
-      <ObjectFileOutput>$(OutDir)data\shader\vs_imgui.cso</ObjectFileOutput>
     </FxCompile>
-    <FxCompile Include="..\src\hlsl\imgui.hlsl">
+    <FxCompile Include="..\src\hlsl\imgui_ps.hlsl">
       <ShaderType>Pixel</ShaderType>
-      <EntryPointName>PsImgui</EntryPointName>
-      <ObjectFileOutput>$(OutDir)data\shader\ps_imgui.cso</ObjectFileOutput>
     </FxCompile>
-    <FxCompile Include="..\src\hlsl\scene.hlsl">
+    <FxCompile Include="..\src\hlsl\scene_vs.hlsl">
       <ShaderType>Vertex</ShaderType>
-      <EntryPointName>VsScene</EntryPointName>
-      <ObjectFileOutput>$(OutDir)data\shader\vs_scene.cso</ObjectFileOutput>
     </FxCompile>
-    <FxCompile Include="..\src\hlsl\scene.hlsl">
+    <FxCompile Include="..\src\hlsl\scene_ps.hlsl">
       <ShaderType>Pixel</ShaderType>
-      <EntryPointName>PsScene</EntryPointName>
-      <ObjectFileOutput>$(OutDir)data\shader\ps_scene.cso</ObjectFileOutput>
     </FxCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -118,6 +110,8 @@
     <FxCompile>
       <ShaderModel>5.1</ShaderModel>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <EntryPointName>main</EntryPointName>
+      <ObjectFileOutput>$(OutDir)data\shader\%(Filename).cso</ObjectFileOutput>
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -144,6 +138,8 @@
     <FxCompile>
       <ShaderModel>5.1</ShaderModel>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <EntryPointName>main</EntryPointName>
+      <ObjectFileOutput>$(OutDir)data\shader\%(Filename).cso</ObjectFileOutput>
     </FxCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

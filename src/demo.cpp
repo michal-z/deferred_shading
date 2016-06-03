@@ -474,8 +474,8 @@ bool CDemo::InitPipelineStates()
         };
 
         size_t vsSize, psSize;
-        const uint8_t *vsCode = Lib::LoadFile("data/shader/vs_scene.cso", &vsSize);
-        const uint8_t *psCode = Lib::LoadFile("data/shader/ps_scene.cso", &psSize);
+        const uint8_t *vsCode = Lib::LoadFile("data/shader/scene_vs.cso", &vsSize);
+        const uint8_t *psCode = Lib::LoadFile("data/shader/scene_ps.cso", &psSize);
         assert(vsCode && psCode);
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
