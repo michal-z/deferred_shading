@@ -141,12 +141,14 @@ void CDemo::Render()
     barrier.Transition.Subresource = 0;
     CmdList->ResourceBarrier(1, &barrier);
 
-    const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = SwapBuffersHeap->GetCPUDescriptorHandleForHeapStart();
     rtvHandle.ptr += BackBufferIndex * DescriptorSizeRTV;
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = DsvHeap->GetCPUDescriptorHandleForHeapStart();
+    CmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
+    const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
     CmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-    CmdList->OMSetRenderTargets(1, &rtvHandle, TRUE, nullptr);
+	CmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     CmdList->SetPipelineState(ScenePso);
     CmdList->SetGraphicsRootSignature(StaticMeshRs);
@@ -387,6 +389,44 @@ bool CDemo::InitWindowAndD3D12()
         if (FAILED(res)) return false;
     }
 
+    // depth-stencil image, view and heap
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC descHeap = {};
+        descHeap.NumDescriptors = 1;
+        descHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        descHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        res = Device->CreateDescriptorHeap(&descHeap, IID_PPV_ARGS(&DsvHeap));
+        if (FAILED(res)) return false;
+
+        D3D12_CLEAR_VALUE optimizedClearValue = {};
+        optimizedClearValue.Format = DXGI_FORMAT_D32_FLOAT;
+        optimizedClearValue.DepthStencil.Depth = 1.0f;
+        optimizedClearValue.DepthStencil.Stencil = 0;
+
+        D3D12_HEAP_PROPERTIES heapProps = {};
+        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+        D3D12_RESOURCE_DESC imageDesc = {};
+        imageDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        imageDesc.Width = (UINT64)Resolution[0];
+        imageDesc.Height = (UINT)Resolution[1];
+        imageDesc.DepthOrArraySize = imageDesc.MipLevels = 1;
+        imageDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        imageDesc.SampleDesc.Count = 1;
+        imageDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        imageDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+        res = Device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &imageDesc,
+                                              D3D12_RESOURCE_STATE_DEPTH_WRITE, &optimizedClearValue,
+                                              IID_PPV_ARGS(&DsvImage));
+        if (FAILED(res)) return false;
+
+        D3D12_DEPTH_STENCIL_VIEW_DESC viewDesc = {};
+        viewDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+        viewDesc.Flags = D3D12_DSV_FLAG_NONE;
+        Device->CreateDepthStencilView(DsvImage, &viewDesc, DsvHeap->GetCPUDescriptorHandleForHeapStart());
+    }
+
     return true;
 }
 
@@ -445,11 +485,15 @@ bool CDemo::InitPipelineStates()
         desc.PS = { psCode, psSize };
         desc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
         desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        desc.DepthStencilState.DepthEnable = TRUE;
+        desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        desc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
         desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
         desc.SampleMask = UINT_MAX;
         desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         desc.NumRenderTargets = 1;
         desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
         desc.SampleDesc.Count = 1;
 
         hr = Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&ScenePso));

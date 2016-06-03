@@ -43,6 +43,8 @@ private:
 
     ID3D12DescriptorHeap *SwapBuffersHeap = nullptr;
     ID3D12Resource *SwapBuffers[kNumSwapBuffers] = {};
+    ID3D12DescriptorHeap *DsvHeap = nullptr;
+    ID3D12Resource *DsvImage = nullptr;
     uint32_t DescriptorSize;
     uint32_t DescriptorSizeRTV;
 
@@ -62,6 +64,7 @@ private:
     void Render();
     static LRESULT CALLBACK Winproc(HWND win, UINT msg, WPARAM wparam, LPARAM lparam);
     void UpdateFrameStats();
+
     bool InitWindowAndD3D12();
     bool InitRootSignatures();
     bool InitPipelineStates();
