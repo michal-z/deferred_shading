@@ -2,7 +2,7 @@
 #include <new>
 #include "EABase/eabase.h"
 #include "demo_imgui_renderer.h"
-#include "demo_scene.h"
+#include "demo_scene_resources.h"
 #include "demo_lib.h"
 #include "imgui.h"
 
@@ -28,7 +28,7 @@ CDemo::~CDemo()
         WaitForSingleObject(FrameFenceEvent, INFINITE);
     }
 
-    delete Scene;
+    delete SceneResources;
     delete GuiRenderer;
 
     if (FrameFenceEvent)
@@ -57,8 +57,8 @@ bool CDemo::Init()
     GuiRenderer = new CGuiRenderer{};
     if (!GuiRenderer->Init(CmdList, kNumBufferedFrames, &uploadBuffers)) return false;
 
-    Scene = new CScene{};
-    if (!Scene->Load("data/sponza/Sponza.fbx", "data/sponza/", CmdList, &uploadBuffers)) return false;
+    SceneResources = new CSceneResources{};
+    if (!SceneResources->Init("data/sponza/Sponza.fbx", "data/sponza/", CmdList, &uploadBuffers)) return false;
 
     CmdList->Close();
     ID3D12CommandList *cmdLists[] = { (ID3D12CommandList *)CmdList };
@@ -150,10 +150,7 @@ void CDemo::Render()
     CmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 	CmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
-    CmdList->SetPipelineState(ScenePso);
-    CmdList->SetGraphicsRootSignature(StaticMeshRs);
-    CmdList->SetGraphicsRootConstantBufferView(0, fres->PerFrameCb->GetGPUVirtualAddress());
-    Scene->Render(CmdList);
+    RenderScene();
 
     ImGui::ShowTestWindow();
     GuiRenderer->Render(CmdList, FrameIndex);
@@ -165,6 +162,27 @@ void CDemo::Render()
     CmdList->Close();
     ID3D12CommandList *cmdLists[] = { (ID3D12CommandList *)CmdList };
     CmdQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
+}
+
+void CDemo::RenderScene()
+{
+    CmdList->SetPipelineState(ScenePso);
+    CmdList->SetGraphicsRootSignature(StaticMeshRs);
+    CmdList->SetGraphicsRootConstantBufferView(0, FrameResources[FrameIndex].PerFrameCb->GetGPUVirtualAddress());
+
+    CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    CmdList->IASetVertexBuffers(0, 1, &SceneResources->VertexBufferView);
+    CmdList->IASetIndexBuffer(&SceneResources->IndexBufferView);
+
+    uint32_t startIndex = 0;
+    int32_t baseVertex = 0;
+
+    for (const auto &meshSection : SceneResources->MeshSections)
+    {
+        CmdList->DrawIndexedInstanced(meshSection.NumIndices, 1, startIndex, baseVertex, 0);
+        startIndex += meshSection.NumIndices;
+        baseVertex += meshSection.NumVertices;
+    }
 }
 
 LRESULT CALLBACK CDemo::Winproc(HWND win, UINT msg, WPARAM wparam, LPARAM lparam)

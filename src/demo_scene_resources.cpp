@@ -1,16 +1,16 @@
-#include "demo_scene.h"
+#include "demo_scene_resources.h"
 #include "demo_lib.h"
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
-CScene::~CScene()
+CSceneResources::~CSceneResources()
 {
 }
 
-bool CScene::Load(const char *meshFile, const char *imageFolder,
-                  ID3D12GraphicsCommandList *cmdList,
-                  eastl::vector<ID3D12Resource *> *uploadBuffers)
+bool CSceneResources::Init(const char *meshFile, const char *imageFolder,
+                           ID3D12GraphicsCommandList *cmdList,
+                           eastl::vector<ID3D12Resource *> *uploadBuffers)
 {
     assert(meshFile && imageFolder && cmdList && uploadBuffers);
 
@@ -35,29 +35,8 @@ bool CScene::Load(const char *meshFile, const char *imageFolder,
     return true;
 }
 
-void CScene::Render(ID3D12GraphicsCommandList *cmdList)
-{
-    assert(cmdList);
-    assert(VertexBuffer);
-    assert(IndexBuffer);
-
-    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    cmdList->IASetVertexBuffers(0, 1, &VertexBufferView);
-    cmdList->IASetIndexBuffer(&IndexBufferView);
-
-    uint32_t startIndex = 0;
-    int32_t baseVertex = 0;
-
-    for (size_t i = 0; i < MeshSections.size(); ++i)
-    {
-        cmdList->DrawIndexedInstanced(MeshSections[i].NumIndices, 1, startIndex, baseVertex, 0);
-        startIndex += MeshSections[i].NumIndices;
-        baseVertex += MeshSections[i].NumVertices;
-    }
-}
-
-bool CScene::LoadGeometry(const aiScene *importedScene, ID3D12GraphicsCommandList *cmdList,
-                          eastl::vector<ID3D12Resource *> *uploadBuffers)
+bool CSceneResources::LoadGeometry(const aiScene *importedScene, ID3D12GraphicsCommandList *cmdList,
+                                   eastl::vector<ID3D12Resource *> *uploadBuffers)
 {
     MeshSections.resize(importedScene->mNumMeshes);
 

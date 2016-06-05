@@ -9,7 +9,7 @@ const uint32_t kDemoResX = 1280;
 const uint32_t kDemoResY = 720;
 
 class CGuiRenderer;
-class CScene;
+class CSceneResources;
 
 class CDemo
 {
@@ -59,11 +59,12 @@ private:
     HANDLE FrameFenceEvent = nullptr;
 
     CGuiRenderer *GuiRenderer = nullptr;
-    CScene *Scene = nullptr;
+    CSceneResources *SceneResources = nullptr;
 
     void Render();
     static LRESULT CALLBACK Winproc(HWND win, UINT msg, WPARAM wparam, LPARAM lparam);
     void UpdateFrameStats();
+    void RenderScene();
 
     bool InitWindowAndD3D12();
     bool InitRootSignatures();
