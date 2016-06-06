@@ -70,75 +70,15 @@ bool CGuiRenderer::Init(ID3D12GraphicsCommandList *cmdList, uint32_t numBuffered
         ImGuiIO &io = ImGui::GetIO();
 
         uint8_t *pixels;
-        int width, height;
+        int32_t width, height;
         io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
 
-        D3D12_HEAP_PROPERTIES heapProps = {};
-        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-        D3D12_RESOURCE_DESC textureDesc = {};
-        textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        textureDesc.Width = (UINT64)width;
-        textureDesc.Height = (UINT)height;
-        textureDesc.DepthOrArraySize = textureDesc.MipLevels = 1;
-        textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        textureDesc.SampleDesc.Count = 1;
-        textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        hr = Device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &textureDesc,
-                                             D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                                             IID_PPV_ARGS(&FontTex));
-        if (FAILED(hr)) return false;
-
-        D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
-        uint32_t numRows;
-        uint64_t rowSize;
-        uint64_t bufferSize;
-        Device->GetCopyableFootprints(&textureDesc, 0, 1, 0, &layout, &numRows, &rowSize, &bufferSize);
-
-
-        heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-        D3D12_RESOURCE_DESC bufferDesc = {};
-        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        bufferDesc.Width = bufferSize;
-        bufferDesc.Height = bufferDesc.DepthOrArraySize = bufferDesc.MipLevels = 1;
-        bufferDesc.SampleDesc.Count = 1;
-        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
         ID3D12Resource *fontUploadBuffer;
-        hr = Device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-                                             D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                             IID_PPV_ARGS(&fontUploadBuffer));
-        if (FAILED(hr)) return false;
+        FontTex = Lib::CreateTextureFromMemory(width, height, 4, pixels,
+                                               D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, cmdList,
+                                               &fontUploadBuffer);
+        if (!FontTex) return false;
         uploadBuffers->push_back(fontUploadBuffer);
-
-        D3D12_RANGE range = {};
-        uint8_t *ptr;
-        fontUploadBuffer->Map(0, &range, (void **)&ptr);
-        for (uint32_t row = 0; row < numRows; ++row)
-        {
-            memcpy(ptr + row * rowSize, pixels + row * width * 4, width * 4);
-        }
-        fontUploadBuffer->Unmap(0, nullptr);
-
-        D3D12_TEXTURE_COPY_LOCATION copyDst = {};
-        copyDst.pResource = FontTex;
-        copyDst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        copyDst.SubresourceIndex = 0;
-
-        D3D12_TEXTURE_COPY_LOCATION copySrc = {};
-        copySrc.pResource = fontUploadBuffer;
-        copySrc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        copySrc.PlacedFootprint = layout;
-        cmdList->CopyTextureRegion(&copyDst, 0, 0, 0, &copySrc, nullptr);
-
-        D3D12_RESOURCE_BARRIER barrier = {};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource = FontTex;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        barrier.Transition.Subresource = 0;
-        cmdList->ResourceBarrier(1, &barrier);
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;

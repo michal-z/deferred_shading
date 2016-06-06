@@ -177,8 +177,10 @@ void CDemo::RenderScene()
     uint32_t startIndex = 0;
     int32_t baseVertex = 0;
 
-    for (const auto &meshSection : SceneResources->MeshSections)
+    for (size_t i = 0; i < SceneResources->MeshSections.size(); ++i)
     {
+        const CSceneResources::SMeshSection &meshSection = SceneResources->MeshSections[i];
+
         CmdList->DrawIndexedInstanced(meshSection.NumIndices, 1, startIndex, baseVertex, 0);
         startIndex += meshSection.NumIndices;
         baseVertex += meshSection.NumVertices;
