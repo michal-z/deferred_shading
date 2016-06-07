@@ -7,10 +7,11 @@ struct aiScene;
 class CSceneResources
 {
 public:
-    ~CSceneResources();
+    ~CSceneResources() { Deinit(); }
     bool Init(const char *meshFile, const char *imageFolder,
               ID3D12GraphicsCommandList *cmdList,
               eastl::vector<ID3D12Resource *> *uploadBuffers);
+    void Deinit();
 
     struct SMeshVertex
     {
@@ -29,6 +30,8 @@ public:
         ID3D12Resource *DiffuseTexture = nullptr;
     };
     eastl::vector<SMeshSection> MeshSections;
+
+    ID3D12DescriptorHeap *DescriptorHeap;
 
     ID3D12Resource *VertexBuffer = nullptr;
     ID3D12Resource *IndexBuffer = nullptr;

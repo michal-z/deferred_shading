@@ -4,10 +4,6 @@
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
 
-CSceneResources::~CSceneResources()
-{
-}
-
 bool CSceneResources::Init(const char *meshFile, const char *imageFolder,
                            ID3D12GraphicsCommandList *cmdList,
                            eastl::vector<ID3D12Resource *> *uploadBuffers)
@@ -33,6 +29,11 @@ bool CSceneResources::Init(const char *meshFile, const char *imageFolder,
     if (!LoadData(importedScene, imageFolder, cmdList, uploadBuffers)) return false;
 
     return true;
+}
+
+void CSceneResources::Deinit()
+{
+    // TODO: Implement this
 }
 
 bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFolder,
