@@ -48,6 +48,8 @@ private:
     uint32_t DescriptorSize;
     uint32_t DescriptorSizeRTV;
 
+    ID3D12DescriptorHeap *SrvHeap = nullptr;
+
     ID3D12RootSignature *StaticMeshRs = nullptr;
     ID3D12PipelineState *ScenePso = nullptr;
 
@@ -69,4 +71,5 @@ private:
     bool InitWindowAndD3D12();
     bool InitPipelineStates();
     bool InitConstantBuffers();
+    bool InitDescriptorHeap();
 };

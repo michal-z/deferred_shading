@@ -76,6 +76,7 @@ bool CDemo::Init()
 
     if (!InitPipelineStates()) return false;
     if (!InitConstantBuffers()) return false;
+    if (!InitDescriptorHeap()) return false;
 
     return true;
 }
@@ -87,7 +88,7 @@ void CDemo::Update()
     float sinv, cosv;
     XMScalarSinCos(&sinv, &cosv, (float)(0.25 * Time));
 
-    XMMATRIX viewproj = XMMatrixLookAtLH(XMVectorSet(18.0f*cosv, 2.0f, -18.0f*sinv, 1.0f),
+    XMMATRIX viewproj = XMMatrixLookAtLH(XMVectorSet(2.0f*cosv, 0.5f, -2.0f*sinv, 1.0f),
                                          XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f),
                                          XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f)) *
         XMMatrixPerspectiveFovLH(XM_PI / 3, (float)Resolution[0] / Resolution[1], 0.1f, 100.0f);
@@ -166,8 +167,9 @@ void CDemo::Render()
 void CDemo::RenderScene()
 {
     CmdList->SetPipelineState(ScenePso);
+    CmdList->SetDescriptorHeaps(1, &SrvHeap);
     CmdList->SetGraphicsRootSignature(StaticMeshRs);
-    CmdList->SetGraphicsRootConstantBufferView(0, FrameResources[FrameIndex].PerFrameCb->GetGPUVirtualAddress());
+    CmdList->SetGraphicsRootConstantBufferView(1, FrameResources[FrameIndex].PerFrameCb->GetGPUVirtualAddress());
 
     CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     CmdList->IASetVertexBuffers(0, 1, &SceneResources->VertexBufferView);
@@ -175,10 +177,15 @@ void CDemo::RenderScene()
 
     uint32_t startIndex = 0;
     int32_t baseVertex = 0;
+    
+    D3D12_GPU_DESCRIPTOR_HANDLE handle = SrvHeap->GetGPUDescriptorHandleForHeapStart();
 
     for (size_t i = 0; i < SceneResources->MeshSections.size(); ++i)
     {
         const CSceneResources::SMeshSection &meshSection = SceneResources->MeshSections[i];
+
+        CmdList->SetGraphicsRootDescriptorTable(0, handle);
+        handle.ptr += DescriptorSize;
 
         CmdList->DrawIndexedInstanced(meshSection.NumIndices, 1, startIndex, baseVertex, 0);
         startIndex += meshSection.NumIndices;
@@ -473,7 +480,7 @@ bool CDemo::InitPipelineStates()
         desc.InputLayout = { descInputLayout, _countof(descInputLayout) };
         desc.VS = { vsCode, vsSize };
         desc.PS = { psCode, psSize };
-        desc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+        desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
         desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
         desc.DepthStencilState.DepthEnable = TRUE;
         desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
@@ -528,9 +535,38 @@ bool CDemo::InitConstantBuffers()
     return true;
 }
 
+bool CDemo::InitDescriptorHeap()
+{
+    HRESULT hr;
+
+    D3D12_DESCRIPTOR_HEAP_DESC descHeap = {};
+    descHeap.NumDescriptors = (UINT)SceneResources->MeshSections.size();
+    descHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    descHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    hr = Device->CreateDescriptorHeap(&descHeap, IID_PPV_ARGS(&SrvHeap));
+    if (FAILED(hr)) return false;
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE handle = SrvHeap->GetCPUDescriptorHandleForHeapStart();
+
+    for (size_t i = 0; i < SceneResources->MeshSections.size(); ++i)
+    {
+        Device->CreateShaderResourceView(SceneResources->MeshSections[i].DiffuseTexture,
+                                         &srvDesc, handle);
+        handle.ptr += DescriptorSize;
+    }
+
+    return true;
+}
+
 int CALLBACK WinMain(HINSTANCE hinst, HINSTANCE hprevinst, LPSTR cmdline, int cmdshow)
 {
-    CDemo *demo = new CDemo{};
+    CDemo *demo = new CDemo;
     demo->Resolution[0] = kDemoResX;
     demo->Resolution[1] = kDemoResY;
 
