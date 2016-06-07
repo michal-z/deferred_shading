@@ -31,7 +31,9 @@ public:
     };
     eastl::vector<SMeshSection> MeshSections;
 
-    ID3D12DescriptorHeap *DescriptorHeap;
+    uint32_t NumSrvDescriptors = 0;
+    ID3D12DescriptorHeap *SrvHeap = nullptr;
+    D3D12_CPU_DESCRIPTOR_HANDLE SrvHeapStart = {};
 
     ID3D12Resource *VertexBuffer = nullptr;
     ID3D12Resource *IndexBuffer = nullptr;
@@ -44,4 +46,6 @@ private:
     bool LoadData(const aiScene *scene, const char *imageFolder,
                   ID3D12GraphicsCommandList *cmdList,
                   eastl::vector<ID3D12Resource *> *uploadBuffers);
+    ID3D12Resource *LoadTexture(const char *filename, ID3D12GraphicsCommandList *cmdList,
+                                eastl::vector<ID3D12Resource *> *uploadBuffers);
 };

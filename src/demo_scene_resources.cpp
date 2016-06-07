@@ -42,6 +42,16 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
 {
     MeshSections.resize(importedScene->mNumMeshes);
 
+    HRESULT hr;
+    D3D12_DESCRIPTOR_HEAP_DESC descHeap = {};
+    descHeap.NumDescriptors = NumSrvDescriptors = (UINT)MeshSections.size();
+    descHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    hr = Device->CreateDescriptorHeap(&descHeap, IID_PPV_ARGS(&SrvHeap));
+    if (FAILED(hr)) return false;
+
+    SrvHeapStart = SrvHeap->GetCPUDescriptorHandleForHeapStart();
+
+
     uint32_t totalNumVertices = 0;
     uint32_t totalNumIndices = 0;
 
@@ -80,12 +90,19 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
         strcpy(fullPath, imageFolder);
         strcat(fullPath, path.data);
 
-        ID3D12Resource *uploadBuffer;
-        MeshSections[m].DiffuseTexture = Lib::CreateTextureFromFile(fullPath, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                                                                    cmdList, &uploadBuffer);
+        MeshSections[m].DiffuseTexture = LoadTexture(fullPath, cmdList, uploadBuffers);
         if (MeshSections[m].DiffuseTexture)
         {
-            uploadBuffers->push_back(uploadBuffer);
+            /*
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Texture2D.MipLevels = 1;
+
+            D3D12_CPU_DESCRIPTOR_HANDLE handle = DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+            Device->CreateShaderResourceView(FontTex, &srvDesc, handle);
+            */
         }
 
         for (uint32_t v = 0; v < mesh->mNumVertices; ++v)
@@ -136,7 +153,6 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
     uploadVBuf->Unmap(0, nullptr);
     uploadIBuf->Unmap(0, nullptr);
 
-    HRESULT hr;
     D3D12_HEAP_PROPERTIES heapProps = {};
     heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
@@ -183,4 +199,80 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
     IndexBufferView.SizeInBytes = totalNumIndices * sizeof(SMeshIndex);
 
     return true;
+}
+
+ID3D12Resource *CSceneResources::LoadTexture(const char *filename, ID3D12GraphicsCommandList *cmdList,
+                                             eastl::vector<ID3D12Resource *> *uploadBuffers)
+{
+    int32_t imgW, imgH, imgN;
+    uint8_t *imgPix = stbi_load(filename, &imgW, &imgH, &imgN, 4);
+    if (!imgPix) return nullptr;
+
+    HRESULT hr;
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+    D3D12_RESOURCE_DESC textureDesc = {};
+    textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    textureDesc.Width = (UINT64)imgW;
+    textureDesc.Height = (UINT)imgH;
+    textureDesc.DepthOrArraySize = 1;
+    textureDesc.MipLevels = 1;
+    textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    textureDesc.SampleDesc.Count = 1;
+    textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+
+    ID3D12Resource *texture;
+    hr = Device->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &textureDesc,
+                                         D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                         IID_PPV_ARGS(&texture));
+    if (FAILED(hr))
+    {
+        stbi_image_free(imgPix);
+        return nullptr;
+    }
+
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout;
+    uint32_t numRows;
+    uint64_t rowSize, bufferSize;
+    Device->GetCopyableFootprints(&textureDesc, 0, 1, 0, &layout, &numRows, &rowSize, &bufferSize);
+
+    ID3D12Resource *uploadBuffer = Lib::CreateUploadBuffer(Device, bufferSize);
+    if (uploadBuffer == nullptr)
+    {
+        texture->Release();
+        stbi_image_free(imgPix);
+        return nullptr;
+    }
+    uploadBuffers->push_back(uploadBuffer);
+
+    D3D12_RANGE range = {};
+    uint8_t *ptr;
+    uploadBuffer->Map(0, &range, (void **)&ptr);
+    for (uint32_t row = 0; row < numRows; ++row)
+    {
+        memcpy(ptr + row * rowSize, imgPix + row * imgW * 4, imgW * 4);
+    }
+    uploadBuffer->Unmap(0, nullptr);
+
+    D3D12_TEXTURE_COPY_LOCATION copyDst = {};
+    copyDst.pResource = texture;
+    copyDst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    copyDst.SubresourceIndex = 0;
+
+    D3D12_TEXTURE_COPY_LOCATION copySrc = {};
+    copySrc.pResource = uploadBuffer;
+    copySrc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    copySrc.PlacedFootprint = layout;
+    cmdList->CopyTextureRegion(&copyDst, 0, 0, 0, &copySrc, nullptr);
+
+    D3D12_RESOURCE_BARRIER barrier = {};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = texture;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barrier.Transition.Subresource = 0;
+    cmdList->ResourceBarrier(1, &barrier);
+
+    return texture;
 }
