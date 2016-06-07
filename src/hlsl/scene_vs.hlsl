@@ -6,7 +6,7 @@ struct SPerFrame
 };
 ConstantBuffer<SPerFrame> CbvPerFrame : register(b0);
 
-[RootSignature(RsScene)]
+[RootSignature(RsStaticMesh)]
 VsOutput main(VsInput i)
 {
     VsOutput o;

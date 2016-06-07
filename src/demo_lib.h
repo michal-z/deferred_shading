@@ -13,7 +13,7 @@ double GetTime();
 
 ID3D12Resource *CreateUploadBuffer(ID3D12Device *device, uint64_t bufferSize);
 
-ID3D12Resource *CreateTextureFromMemory(uint32_t imgW, uint32_t imgH, uint32_t imgN, uint8_t *imgPix,
+ID3D12Resource *CreateTextureFromMemory(uint32_t imgW, uint32_t imgH, uint8_t *imgPix,
                                         D3D12_RESOURCE_STATES requestedState,
                                         ID3D12GraphicsCommandList *cmdList,
                                         ID3D12Resource **uploadBuffer);

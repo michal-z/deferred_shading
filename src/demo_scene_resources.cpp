@@ -30,13 +30,14 @@ bool CSceneResources::Init(const char *meshFile, const char *imageFolder,
 
     importedScene = sceneImporter.ApplyPostProcessing(ppFlags);
 
-    if (!LoadGeometry(importedScene, cmdList, uploadBuffers)) return false;
+    if (!LoadData(importedScene, imageFolder, cmdList, uploadBuffers)) return false;
 
     return true;
 }
 
-bool CSceneResources::LoadGeometry(const aiScene *importedScene, ID3D12GraphicsCommandList *cmdList,
-                                   eastl::vector<ID3D12Resource *> *uploadBuffers)
+bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFolder,
+                               ID3D12GraphicsCommandList *cmdList,
+                               eastl::vector<ID3D12Resource *> *uploadBuffers)
 {
     MeshSections.resize(importedScene->mNumMeshes);
 
@@ -70,16 +71,19 @@ bool CSceneResources::LoadGeometry(const aiScene *importedScene, ID3D12GraphicsC
     for (size_t m = 0; m < MeshSections.size(); ++m)
     {
         aiMesh *mesh = importedScene->mMeshes[m];
-        /*
-        aiMaterial *mat = importedScene->mMaterials[mesh->mMaterialIndex];
 
+        aiMaterial *mat = importedScene->mMaterials[mesh->mMaterialIndex];
         aiString path;
         mat->GetTexture(aiTextureType_DIFFUSE, 0, &path);
-
         char fullPath[256];
         strcpy(fullPath, imageFolder);
         strcat(fullPath, path.data);
-        */
+
+        ID3D12Resource *uploadBuffer;
+        MeshSections[m].DiffuseTexture = Lib::CreateTextureFromFile(fullPath, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+                                                                    cmdList, &uploadBuffer);
+        if (!uploadBuffer) return false;
+        uploadBuffers->push_back(uploadBuffer);
 
         for (uint32_t v = 0; v < mesh->mNumVertices; ++v)
         {

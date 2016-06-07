@@ -70,12 +70,12 @@ ID3D12Resource *Lib::CreateUploadBuffer(ID3D12Device *device, uint64_t bufferSiz
 }
 
 
-ID3D12Resource *Lib::CreateTextureFromMemory(uint32_t imgW, uint32_t imgH, uint32_t imgN, uint8_t *imgPix,
+ID3D12Resource *Lib::CreateTextureFromMemory(uint32_t imgW, uint32_t imgH, uint8_t *imgPix,
                                              D3D12_RESOURCE_STATES requestedState,
                                              ID3D12GraphicsCommandList *cmdList,
                                              ID3D12Resource **uploadBuffer)
 {
-    assert(imgW > 0 && imgH > 0 && (imgN == 3 || imgN == 4));
+    assert(imgW > 0 && imgH > 0);
     assert(imgPix);
     assert(cmdList);
     assert(uploadBuffer);
@@ -127,7 +127,7 @@ ID3D12Resource *Lib::CreateTextureFromMemory(uint32_t imgW, uint32_t imgH, uint3
     (*uploadBuffer)->Map(0, &range, (void **)&ptr);
     for (uint32_t row = 0; row < numRows; ++row)
     {
-        memcpy(ptr + row * rowSize, imgPix + row * imgW * imgN, imgW * imgN);
+        memcpy(ptr + row * rowSize, imgPix + row * imgW * 4, imgW * 4);
     }
     (*uploadBuffer)->Unmap(0, nullptr);
 
@@ -162,10 +162,10 @@ ID3D12Resource *Lib::CreateTextureFromFile(const char *filename, D3D12_RESOURCE_
     assert(uploadBuffer);
 
     int32_t imgW, imgH, imgN;
-    uint8_t *imgPix = stbi_load(filename, &imgW, &imgH, &imgN, 0);
+    uint8_t *imgPix = stbi_load(filename, &imgW, &imgH, &imgN, 4);
     if (!imgPix) return nullptr;
 
-    ID3D12Resource *texture = CreateTextureFromMemory(imgW, imgH, imgN, imgPix, requestedState,
+    ID3D12Resource *texture = CreateTextureFromMemory(imgW, imgH, imgPix, requestedState,
                                                       cmdList, uploadBuffer);
     stbi_image_free(imgPix);
     return texture;

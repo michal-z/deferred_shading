@@ -38,6 +38,7 @@ public:
 private:
     ID3D12Device *Device = nullptr;
 
-    bool LoadGeometry(const aiScene *scene, ID3D12GraphicsCommandList *cmdList,
-                      eastl::vector<ID3D12Resource *> *uploadBuffers);
+    bool LoadData(const aiScene *scene, const char *imageFolder,
+                  ID3D12GraphicsCommandList *cmdList,
+                  eastl::vector<ID3D12Resource *> *uploadBuffers);
 };

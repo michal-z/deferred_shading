@@ -6,6 +6,7 @@ struct STransform
 };
 ConstantBuffer<STransform> gTransform : register(b0);
 
+[RootSignature(RsImgui)]
 VsOutput main(VsInput i)
 {
     VsOutput o;

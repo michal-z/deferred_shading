@@ -54,10 +54,10 @@ bool CDemo::Init()
 
     eastl::vector<ID3D12Resource *> uploadBuffers;
 
-    GuiRenderer = new CGuiRenderer{};
-    if (!GuiRenderer->Init(CmdList, kNumBufferedFrames, &uploadBuffers)) return false;
+    GuiRenderer = new CGuiRenderer;
+    if (!GuiRenderer->Init(kNumBufferedFrames, CmdList, &uploadBuffers)) return false;
 
-    SceneResources = new CSceneResources{};
+    SceneResources = new CSceneResources;
     if (!SceneResources->Init("data/sponza/Sponza.fbx", "data/sponza/", CmdList, &uploadBuffers)) return false;
 
     CmdList->Close();
@@ -74,7 +74,6 @@ bool CDemo::Init()
     }
 
 
-    if (!InitRootSignatures()) return false;
     if (!InitPipelineStates()) return false;
     if (!InitConstantBuffers()) return false;
 
@@ -450,34 +449,6 @@ bool CDemo::InitWindowAndD3D12()
     return true;
 }
 
-bool CDemo::InitRootSignatures()
-{
-    HRESULT hr;
-
-    // static mesh root signature
-    {
-        D3D12_ROOT_PARAMETER param[1] = {};
-        param[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-        param[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-        param[0].Descriptor.ShaderRegister = 0;
-
-        D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
-        rootSignatureDesc.NumParameters = _countof(param);
-        rootSignatureDesc.pParameters = param;
-        rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-        ID3DBlob *blob = nullptr;
-        hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1,
-                                         &blob, nullptr);
-        hr |= Device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                          IID_PPV_ARGS(&StaticMeshRs));
-        SAFE_RELEASE(blob);
-        if (FAILED(hr)) return false;
-    }
-
-    return true;
-}
-
 bool CDemo::InitPipelineStates()
 {
     HRESULT hr;
@@ -500,7 +471,6 @@ bool CDemo::InitPipelineStates()
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
         desc.InputLayout = { descInputLayout, _countof(descInputLayout) };
-        desc.pRootSignature = StaticMeshRs;
         desc.VS = { vsCode, vsSize };
         desc.PS = { psCode, psSize };
         desc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
@@ -517,6 +487,9 @@ bool CDemo::InitPipelineStates()
         desc.SampleDesc.Count = 1;
 
         hr = Device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&ScenePso));
+        if (FAILED(hr)) return false;
+
+        hr = Device->CreateRootSignature(0, vsCode, vsSize, IID_PPV_ARGS(&StaticMeshRs));
         if (FAILED(hr)) return false;
     }
 

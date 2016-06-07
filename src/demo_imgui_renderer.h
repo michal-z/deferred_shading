@@ -6,7 +6,7 @@ class CGuiRenderer
 {
 public:
     ~CGuiRenderer();
-    bool Init(ID3D12GraphicsCommandList *cmdList, uint32_t numBufferedFrames,
+    bool Init(uint32_t numBufferedFrames, ID3D12GraphicsCommandList *cmdList, 
               eastl::vector<ID3D12Resource *> *uploadBuffers);
     bool Render(ID3D12GraphicsCommandList *cmdList, uint32_t frameIndex);
 

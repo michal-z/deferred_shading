@@ -67,7 +67,6 @@ private:
     void RenderScene();
 
     bool InitWindowAndD3D12();
-    bool InitRootSignatures();
     bool InitPipelineStates();
     bool InitConstantBuffers();
 };
