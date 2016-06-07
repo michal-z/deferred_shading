@@ -83,8 +83,10 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
         ID3D12Resource *uploadBuffer;
         MeshSections[m].DiffuseTexture = Lib::CreateTextureFromFile(fullPath, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
                                                                     cmdList, &uploadBuffer);
-        if (!uploadBuffer) return false;
-        uploadBuffers->push_back(uploadBuffer);
+        if (MeshSections[m].DiffuseTexture)
+        {
+            uploadBuffers->push_back(uploadBuffer);
+        }
 
         for (uint32_t v = 0; v < mesh->mNumVertices; ++v)
         {
