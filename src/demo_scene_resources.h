@@ -46,6 +46,7 @@ private:
     bool LoadData(const aiScene *scene, const char *imageFolder,
                   ID3D12GraphicsCommandList *cmdList,
                   eastl::vector<ID3D12Resource *> *uploadBuffers);
-    ID3D12Resource *LoadTexture(const char *filename, ID3D12GraphicsCommandList *cmdList,
+    ID3D12Resource *LoadTexture(const char *filename, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle,
+                                ID3D12GraphicsCommandList *cmdList,
                                 eastl::vector<ID3D12Resource *> *uploadBuffers);
 };

@@ -30,6 +30,7 @@ private:
         ID3D12CommandAllocator *CmdAllocator = nullptr;
         ID3D12Resource *PerFrameCb = nullptr;
         void *PerFrameCbPtr;
+        ID3D12DescriptorHeap *GpuDescriptorHeap;
     };
     SFrameResources FrameResources[kNumBufferedFrames];
 
@@ -71,5 +72,5 @@ private:
     bool InitWindowAndD3D12();
     bool InitPipelineStates();
     bool InitConstantBuffers();
-    bool InitDescriptorHeap();
+    bool InitDescriptorHeaps();
 };

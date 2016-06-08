@@ -76,7 +76,7 @@ bool CDemo::Init()
 
     if (!InitPipelineStates()) return false;
     if (!InitConstantBuffers()) return false;
-    if (!InitDescriptorHeap()) return false;
+    if (!InitDescriptorHeaps()) return false;
 
     return true;
 }
@@ -166,10 +166,12 @@ void CDemo::Render()
 
 void CDemo::RenderScene()
 {
+    const SFrameResources *fres = &FrameResources[FrameIndex];
+
     CmdList->SetPipelineState(ScenePso);
-    CmdList->SetDescriptorHeaps(1, &SrvHeap);
+    CmdList->SetDescriptorHeaps(1, &fres->GpuDescriptorHeap);
     CmdList->SetGraphicsRootSignature(StaticMeshRs);
-    CmdList->SetGraphicsRootConstantBufferView(1, FrameResources[FrameIndex].PerFrameCb->GetGPUVirtualAddress());
+    CmdList->SetGraphicsRootConstantBufferView(1, fres->PerFrameCb->GetGPUVirtualAddress());
 
     CmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     CmdList->IASetVertexBuffers(0, 1, &SceneResources->VertexBufferView);
@@ -178,14 +180,22 @@ void CDemo::RenderScene()
     uint32_t startIndex = 0;
     int32_t baseVertex = 0;
     
-    D3D12_GPU_DESCRIPTOR_HANDLE handle = SrvHeap->GetGPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle =
+        fres->GpuDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
+        fres->GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+
+    Device->CopyDescriptorsSimple(SceneResources->NumSrvDescriptors, cpuHandle,
+                                  SceneResources->SrvHeapStart,
+                                  D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     for (size_t i = 0; i < SceneResources->MeshSections.size(); ++i)
     {
         const CSceneResources::SMeshSection &meshSection = SceneResources->MeshSections[i];
 
-        CmdList->SetGraphicsRootDescriptorTable(0, handle);
-        handle.ptr += DescriptorSize;
+        CmdList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+        gpuHandle.ptr += DescriptorSize;
 
         CmdList->DrawIndexedInstanced(meshSection.NumIndices, 1, startIndex, baseVertex, 0);
         startIndex += meshSection.NumIndices;
@@ -517,7 +527,7 @@ bool CDemo::InitConstantBuffers()
 
         D3D12_RESOURCE_DESC resourceDesc = {};
         resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        resourceDesc.Width = 64;
+        resourceDesc.Width = 1024*16; // FIXME: control this somehow
         resourceDesc.Height = resourceDesc.DepthOrArraySize = resourceDesc.MipLevels = 1;
         resourceDesc.SampleDesc.Count = 1;
         resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -535,30 +545,19 @@ bool CDemo::InitConstantBuffers()
     return true;
 }
 
-bool CDemo::InitDescriptorHeap()
+bool CDemo::InitDescriptorHeaps()
 {
     HRESULT hr;
 
     D3D12_DESCRIPTOR_HEAP_DESC descHeap = {};
-    descHeap.NumDescriptors = (UINT)SceneResources->MeshSections.size();
+    descHeap.NumDescriptors = 10000; // FIXME: control this somehow
     descHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     descHeap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    hr = Device->CreateDescriptorHeap(&descHeap, IID_PPV_ARGS(&SrvHeap));
-    if (FAILED(hr)) return false;
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = 1;
-
-    D3D12_CPU_DESCRIPTOR_HANDLE handle = SrvHeap->GetCPUDescriptorHandleForHeapStart();
-
-    for (size_t i = 0; i < SceneResources->MeshSections.size(); ++i)
+    for (size_t i = 0; i < kNumBufferedFrames; ++i)
     {
-        Device->CreateShaderResourceView(SceneResources->MeshSections[i].DiffuseTexture,
-                                         &srvDesc, handle);
-        handle.ptr += DescriptorSize;
+        hr = Device->CreateDescriptorHeap(&descHeap, IID_PPV_ARGS(&FrameResources[i].GpuDescriptorHeap));
+        if (FAILED(hr)) return false;
     }
 
     return true;

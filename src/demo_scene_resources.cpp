@@ -79,6 +79,9 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
     SMeshIndex *idxptr;
     uploadIBuf->Map(0, &mapRange, (void **)&idxptr);
 
+    const uint32_t descriptorSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = SrvHeapStart;
+
     for (size_t m = 0; m < MeshSections.size(); ++m)
     {
         aiMesh *mesh = importedScene->mMeshes[m];
@@ -90,20 +93,8 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
         strcpy(fullPath, imageFolder);
         strcat(fullPath, path.data);
 
-        MeshSections[m].DiffuseTexture = LoadTexture(fullPath, cmdList, uploadBuffers);
-        if (MeshSections[m].DiffuseTexture)
-        {
-            /*
-            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-            srvDesc.Texture2D.MipLevels = 1;
-
-            D3D12_CPU_DESCRIPTOR_HANDLE handle = DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-            Device->CreateShaderResourceView(FontTex, &srvDesc, handle);
-            */
-        }
+        MeshSections[m].DiffuseTexture = LoadTexture(fullPath, srvHandle, cmdList, uploadBuffers);
+        srvHandle.ptr += descriptorSize;
 
         for (uint32_t v = 0; v < mesh->mNumVertices; ++v)
         {
@@ -201,7 +192,8 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
     return true;
 }
 
-ID3D12Resource *CSceneResources::LoadTexture(const char *filename, ID3D12GraphicsCommandList *cmdList,
+ID3D12Resource *CSceneResources::LoadTexture(const char *filename, D3D12_CPU_DESCRIPTOR_HANDLE srvHandle,
+                                             ID3D12GraphicsCommandList *cmdList,
                                              eastl::vector<ID3D12Resource *> *uploadBuffers)
 {
     int32_t imgW, imgH, imgN;
@@ -273,6 +265,14 @@ ID3D12Resource *CSceneResources::LoadTexture(const char *filename, ID3D12Graphic
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     barrier.Transition.Subresource = 0;
     cmdList->ResourceBarrier(1, &barrier);
+
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+    Device->CreateShaderResourceView(texture, &srvDesc, srvHandle);
 
     return texture;
 }
