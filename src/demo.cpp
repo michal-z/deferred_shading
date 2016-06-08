@@ -4,6 +4,7 @@
 #include "demo_imgui_renderer.h"
 #include "demo_scene_resources.h"
 #include "demo_lib.h"
+#include "demo_mipmaps.h"
 #include "imgui.h"
 
 void *operator new[](size_t size, const char* /*name*/, int /*flags*/,
@@ -73,6 +74,24 @@ bool CDemo::Init()
         uploadBuffers[i]->Release();
     }
 
+    CMipmapGenerator *mipmapGen = new CMipmapGenerator;
+    if (!mipmapGen->Init(Device)) return false;
+
+    for (size_t i = 0; i < SceneResources->MeshSections.size(); ++i)
+    {
+        CmdList->Reset(FrameResources[0].CmdAllocator, nullptr);
+
+        mipmapGen->Generate(SceneResources->MeshSections[i].Textures[0], CmdList);
+
+        CmdList->Close();
+        ID3D12CommandList *cmdLists[] = { (ID3D12CommandList *)CmdList };
+        CmdQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
+
+        CmdQueue->Signal(FrameFence, ++CpuCompletedFrames);
+        FrameFence->SetEventOnCompletion(CpuCompletedFrames, FrameFenceEvent);
+        WaitForSingleObject(FrameFenceEvent, INFINITE);
+    }
+    delete mipmapGen;
 
     if (!InitPipelineStates()) return false;
     if (!InitConstantBuffers()) return false;
@@ -186,7 +205,7 @@ void CDemo::RenderScene()
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
         fres->GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
-    Device->CopyDescriptorsSimple(CSceneResources::NumTexturesPerMesh * (UINT)SceneResources->MeshSections.size(),
+    Device->CopyDescriptorsSimple(CSceneResources::kNumTexturesPerMesh * (UINT)SceneResources->MeshSections.size(),
                                   cpuHandle,
                                   SceneResources->SrvHeap->GetCPUDescriptorHandleForHeapStart(),
                                   D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -196,7 +215,7 @@ void CDemo::RenderScene()
         const CSceneResources::SMeshSection &meshSection = SceneResources->MeshSections[i];
 
         CmdList->SetGraphicsRootDescriptorTable(0, gpuHandle);
-        gpuHandle.ptr += CSceneResources::NumTexturesPerMesh * DescriptorSize;
+        gpuHandle.ptr += CSceneResources::kNumTexturesPerMesh * DescriptorSize;
 
         CmdList->DrawIndexedInstanced(meshSection.NumIndices, 1, startIndex, baseVertex, 0);
         startIndex += meshSection.NumIndices;

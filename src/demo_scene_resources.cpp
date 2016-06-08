@@ -1,5 +1,6 @@
 #include "demo_scene_resources.h"
 #include "demo_lib.h"
+#include "demo_mipmaps.h"
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
@@ -86,15 +87,15 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
 
         aiMaterial *mat = importedScene->mMaterials[mesh->mMaterialIndex];
         aiString path;
-        char fullPath[NumTexturesPerMesh][256];
+        char fullPath[kNumTexturesPerMesh][256];
 
         mat->GetTexture(aiTextureType_DIFFUSE, 0, &path);
         strcpy(fullPath[0], imageFolder);
         strcat(fullPath[0], path.data);
 
-        for (uint32_t t = 0; t < NumTexturesPerMesh; ++t)
+        for (uint32_t t = 0; t < kNumTexturesPerMesh; ++t)
         {
-            MeshSections[m].Texture[t] = LoadTexture(fullPath[t], srvHandle, cmdList, uploadBuffers);
+            MeshSections[m].Textures[t] = LoadTexture(fullPath[t], srvHandle, cmdList, uploadBuffers);
             srvHandle.ptr += descriptorSize;
         }
 
@@ -211,7 +212,7 @@ ID3D12Resource *CSceneResources::LoadTexture(const char *filename, D3D12_CPU_DES
     textureDesc.Width = (UINT64)imgW;
     textureDesc.Height = (UINT)imgH;
     textureDesc.DepthOrArraySize = 1;
-    textureDesc.MipLevels = 1;
+    textureDesc.MipLevels = 0;
     textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     textureDesc.SampleDesc.Count = 1;
     textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -266,7 +267,7 @@ ID3D12Resource *CSceneResources::LoadTexture(const char *filename, D3D12_CPU_DES
     barrier.Transition.pResource = texture;
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barrier.Transition.Subresource = 0;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     cmdList->ResourceBarrier(1, &barrier);
 
 
@@ -274,7 +275,7 @@ ID3D12Resource *CSceneResources::LoadTexture(const char *filename, D3D12_CPU_DES
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srvDesc.Texture2D.MipLevels = 1;
+    srvDesc.Texture2D.MipLevels = -1;
     Device->CreateShaderResourceView(texture, &srvDesc, srvHandle);
 
     return texture;

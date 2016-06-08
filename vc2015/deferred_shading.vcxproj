@@ -15,6 +15,7 @@
     <ClCompile Include="..\src\demo_imgui_renderer.cpp" />
     <ClCompile Include="..\src\demo_lib.cpp" />
     <ClCompile Include="..\src\demo_scene_resources.cpp" />
+    <ClCompile Include="..\src\demo_mipmaps.cpp" />
     <ClCompile Include="..\src\imgui\imgui.cpp" />
     <ClCompile Include="..\src\imgui\imgui_demo.cpp" />
     <ClCompile Include="..\src\imgui\imgui_draw.cpp" />
@@ -33,6 +34,7 @@
     <ClInclude Include="..\src\demo_imgui_renderer.h" />
     <ClInclude Include="..\src\demo_lib.h" />
     <ClInclude Include="..\src\demo_scene_resources.h" />
+    <ClInclude Include="..\src\demo_mipmaps.h" />
     <ClInclude Include="..\src\imgui\imgui.h" />
     <ClInclude Include="..\src\imgui\imgui_internal.h" />
   </ItemGroup>
@@ -48,6 +50,9 @@
     </FxCompile>
     <FxCompile Include="..\src\hlsl\scene_ps.hlsl">
       <ShaderType>Pixel</ShaderType>
+    </FxCompile>
+    <FxCompile Include="..\src\hlsl\gen_mipmap_cs.hlsl">
+      <ShaderType>Compute</ShaderType>
     </FxCompile>
   </ItemGroup>
   <PropertyGroup Label="Globals">

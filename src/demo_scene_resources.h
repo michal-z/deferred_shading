@@ -3,6 +3,7 @@
 #include "demo_common.h"
 
 struct aiScene;
+class CMipmapGenerator;
 
 class CSceneResources
 {
@@ -23,12 +24,12 @@ public:
     };
     typedef uint32_t SMeshIndex;
 
-    static const uint32_t NumTexturesPerMesh = 1;
+    static const uint32_t kNumTexturesPerMesh = 1;
     struct SMeshSection
     {
         uint32_t NumVertices = 0;
         uint32_t NumIndices = 0;
-        ID3D12Resource *Texture[NumTexturesPerMesh] = {};
+        ID3D12Resource *Textures[kNumTexturesPerMesh] = {};
     };
     eastl::vector<SMeshSection> MeshSections;
 
