@@ -15,5 +15,5 @@ private:
     ID3D12PipelineState *Pso = nullptr;
     ID3D12RootSignature *RootSig = nullptr;
     ID3D12DescriptorHeap *SrvUavHeap = nullptr;
-    ID3D12Resource *MipTexture = nullptr;
+    ID3D12Resource *MipTextures[4] = {};
 };
