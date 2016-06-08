@@ -44,12 +44,10 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
 
     HRESULT hr;
     D3D12_DESCRIPTOR_HEAP_DESC descHeap = {};
-    descHeap.NumDescriptors = NumSrvDescriptors = (UINT)MeshSections.size();
+    descHeap.NumDescriptors = (UINT)MeshSections.size();
     descHeap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     hr = Device->CreateDescriptorHeap(&descHeap, IID_PPV_ARGS(&SrvHeap));
     if (FAILED(hr)) return false;
-
-    SrvHeapStart = SrvHeap->GetCPUDescriptorHandleForHeapStart();
 
 
     uint32_t totalNumVertices = 0;
@@ -80,7 +78,7 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
     uploadIBuf->Map(0, &mapRange, (void **)&idxptr);
 
     const uint32_t descriptorSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = SrvHeapStart;
+    D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = SrvHeap->GetCPUDescriptorHandleForHeapStart();
 
     for (size_t m = 0; m < MeshSections.size(); ++m)
     {
@@ -88,13 +86,17 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
 
         aiMaterial *mat = importedScene->mMaterials[mesh->mMaterialIndex];
         aiString path;
-        mat->GetTexture(aiTextureType_DIFFUSE, 0, &path);
-        char fullPath[256];
-        strcpy(fullPath, imageFolder);
-        strcat(fullPath, path.data);
+        char fullPath[NumTexturesPerMesh][256];
 
-        MeshSections[m].DiffuseTexture = LoadTexture(fullPath, srvHandle, cmdList, uploadBuffers);
-        srvHandle.ptr += descriptorSize;
+        mat->GetTexture(aiTextureType_DIFFUSE, 0, &path);
+        strcpy(fullPath[0], imageFolder);
+        strcat(fullPath[0], path.data);
+
+        for (uint32_t t = 0; t < NumTexturesPerMesh; ++t)
+        {
+            MeshSections[m].Texture[t] = LoadTexture(fullPath[t], srvHandle, cmdList, uploadBuffers);
+            srvHandle.ptr += descriptorSize;
+        }
 
         for (uint32_t v = 0; v < mesh->mNumVertices; ++v)
         {
@@ -246,6 +248,7 @@ ID3D12Resource *CSceneResources::LoadTexture(const char *filename, D3D12_CPU_DES
         memcpy(ptr + row * rowSize, imgPix + row * imgW * 4, imgW * 4);
     }
     uploadBuffer->Unmap(0, nullptr);
+    stbi_image_free(imgPix);
 
     D3D12_TEXTURE_COPY_LOCATION copyDst = {};
     copyDst.pResource = texture;

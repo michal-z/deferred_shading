@@ -23,17 +23,17 @@ public:
     };
     typedef uint32_t SMeshIndex;
 
+    static const uint32_t NumTexturesPerMesh = 1;
     struct SMeshSection
     {
         uint32_t NumVertices = 0;
         uint32_t NumIndices = 0;
-        ID3D12Resource *DiffuseTexture = nullptr;
+        ID3D12Resource *Texture[NumTexturesPerMesh] = {};
     };
     eastl::vector<SMeshSection> MeshSections;
 
-    uint32_t NumSrvDescriptors = 0;
+
     ID3D12DescriptorHeap *SrvHeap = nullptr;
-    D3D12_CPU_DESCRIPTOR_HANDLE SrvHeapStart = {};
 
     ID3D12Resource *VertexBuffer = nullptr;
     ID3D12Resource *IndexBuffer = nullptr;

@@ -186,8 +186,9 @@ void CDemo::RenderScene()
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle =
         fres->GpuDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
-    Device->CopyDescriptorsSimple(SceneResources->NumSrvDescriptors, cpuHandle,
-                                  SceneResources->SrvHeapStart,
+    Device->CopyDescriptorsSimple(CSceneResources::NumTexturesPerMesh * (UINT)SceneResources->MeshSections.size(),
+                                  cpuHandle,
+                                  SceneResources->SrvHeap->GetCPUDescriptorHandleForHeapStart(),
                                   D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     for (size_t i = 0; i < SceneResources->MeshSections.size(); ++i)
@@ -195,7 +196,7 @@ void CDemo::RenderScene()
         const CSceneResources::SMeshSection &meshSection = SceneResources->MeshSections[i];
 
         CmdList->SetGraphicsRootDescriptorTable(0, gpuHandle);
-        gpuHandle.ptr += DescriptorSize;
+        gpuHandle.ptr += CSceneResources::NumTexturesPerMesh * DescriptorSize;
 
         CmdList->DrawIndexedInstanced(meshSection.NumIndices, 1, startIndex, baseVertex, 0);
         startIndex += meshSection.NumIndices;
