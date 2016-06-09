@@ -97,64 +97,74 @@ bool CMipmapGenerator::Generate(ID3D12Resource *texture, ID3D12GraphicsCommandLi
     cmdList->SetComputeRootSignature(RootSig);
     cmdList->SetComputeRootDescriptorTable(1, gpuHandle);
 
-    struct
+
+    uint32_t totalMipsToGen = (uint32_t)(textureDesc.MipLevels - 1);
+    uint32_t srcMip = 0;
+
+    for (;;)
     {
-        uint32_t SrcMipLevel;
-        uint32_t NumMipLevels;
-        XMFLOAT2 TexelSize;
-    } rootConst = { 0, 4, XMFLOAT2(0.5f / textureDesc.Width, 0.5f / textureDesc.Height) };
+        uint32_t numMips = totalMipsToGen >= 4 ? 4 : totalMipsToGen;
+        if (numMips == 0) break;
 
-    cmdList->SetComputeRoot32BitConstant(0, 0, 0);
-    cmdList->Dispatch((UINT)textureDesc.Width / 2 / 8, textureDesc.Height / 2 / 8, 1);
+        cmdList->SetComputeRoot32BitConstant(0, srcMip, 0);
+        cmdList->SetComputeRoot32BitConstant(0, numMips, 1);
+        cmdList->Dispatch((UINT)(textureDesc.Width >> (4 + srcMip)),
+                          textureDesc.Height >> (4 + srcMip), 1);
 
+        D3D12_RESOURCE_BARRIER barrier[5] = {};
+        for (uint32_t i = 0; i < 4; ++i)
+        {
+            barrier[i].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier[i].Transition.pResource = MipTextures[i];
+            barrier[i].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            barrier[i].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+            barrier[i].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        }
+        barrier[4].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier[4].Transition.pResource = texture;
+        barrier[4].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier[4].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+        barrier[4].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        cmdList->ResourceBarrier(_countof(barrier), barrier);
 
-    D3D12_RESOURCE_BARRIER barrier[5] = {};
-    for (uint32_t i = 0; i < 4; ++i)
-    {
-        barrier[i].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier[i].Transition.pResource = MipTextures[i];
-        barrier[i].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        barrier[i].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        barrier[i].Transition.Subresource = 0;
+        for (uint32_t i = 0; i < numMips; ++i)
+        {
+            D3D12_TEXTURE_COPY_LOCATION copyDst = {};
+            copyDst.pResource = texture;
+            copyDst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            copyDst.SubresourceIndex = i + 1 + srcMip;
+
+            D3D12_TEXTURE_COPY_LOCATION copySrc = {};
+            copySrc.pResource = MipTextures[i];
+            copySrc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            copySrc.SubresourceIndex = 0;
+
+            D3D12_BOX srcBox =
+            {
+                0, 0, 0, (UINT)(textureDesc.Width >> (i + 1 + srcMip)),
+                textureDesc.Height >> (i + 1 + srcMip), 1
+            };
+            cmdList->CopyTextureRegion(&copyDst, 0, 0, 0, &copySrc, &srcBox);
+        }
+
+        for (uint32_t i = 0; i < 4; ++i)
+        {
+            barrier[i].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier[i].Transition.pResource = MipTextures[i];
+            barrier[i].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+            barrier[i].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            barrier[i].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        }
+        barrier[4].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier[4].Transition.pResource = texture;
+        barrier[4].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        barrier[4].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier[4].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        cmdList->ResourceBarrier(_countof(barrier), barrier);
+
+        totalMipsToGen -= numMips;
+        srcMip += numMips;
     }
-    barrier[4].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier[4].Transition.pResource = texture;
-    barrier[4].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barrier[4].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-    barrier[4].Transition.Subresource = 1;
-    cmdList->ResourceBarrier(_countof(barrier), barrier);
-
-
-    for (uint32_t i = 0; i < 4; ++i)
-    {
-        D3D12_TEXTURE_COPY_LOCATION copyDst = {};
-        copyDst.pResource = texture;
-        copyDst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        copyDst.SubresourceIndex = i + 1;
-
-        D3D12_TEXTURE_COPY_LOCATION copySrc = {};
-        copySrc.pResource = MipTextures[i];
-        copySrc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        copySrc.SubresourceIndex = 0;
-
-        D3D12_BOX srcBox = { 0, 0, 0, (UINT)(textureDesc.Width >> (i + 1)), (textureDesc.Height >> (i + 1)), 1 };
-        cmdList->CopyTextureRegion(&copyDst, 0, 0, 0, &copySrc, &srcBox);
-    }
-
-    for (uint32_t i = 0; i < 4; ++i)
-    {
-        barrier[i].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier[i].Transition.pResource = MipTextures[i];
-        barrier[i].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        barrier[i].Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        barrier[i].Transition.Subresource = 0;
-    }
-    barrier[4].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier[4].Transition.pResource = texture;
-    barrier[4].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    barrier[4].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barrier[4].Transition.Subresource = 1;
-    cmdList->ResourceBarrier(_countof(barrier), barrier);
 
     return true;
 }

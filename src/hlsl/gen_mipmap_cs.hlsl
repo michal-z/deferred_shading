@@ -1,5 +1,5 @@
 #define RsMipmap \
-    "RootConstants(b0, num32BitConstants = 1), " \
+    "RootConstants(b0, num32BitConstants = 2), " \
     "DescriptorTable(SRV(t0), UAV(u0, numDescriptors = 4)), " \
 
 Texture2D<float4> gSrcMip : register(t0);
@@ -12,6 +12,7 @@ SamplerState gSampler : register(s0);
 struct Params
 {
     uint SrcMipLevel;
+    uint NumMipLevels;
 };
 ConstantBuffer<Params> gParams : register(b0);
 
@@ -49,6 +50,7 @@ void main(uint3 globalIdx : SV_DispatchThreadID, uint groupIdx : SV_GroupIndex)
     gOutMip1[globalIdx.xy] = s00;
     StoreColor(groupIdx, s00);
 
+    if (gParams.NumMipLevels == 1) return;
     GroupMemoryBarrierWithGroupSync();
 
     if ((groupIdx & 0x9) == 0)
@@ -62,6 +64,7 @@ void main(uint3 globalIdx : SV_DispatchThreadID, uint groupIdx : SV_GroupIndex)
         StoreColor(groupIdx, s00);
     }
 
+    if (gParams.NumMipLevels == 2) return;
     GroupMemoryBarrierWithGroupSync();
 
     if ((groupIdx & 0x1b) == 0)
@@ -75,6 +78,7 @@ void main(uint3 globalIdx : SV_DispatchThreadID, uint groupIdx : SV_GroupIndex)
         StoreColor(groupIdx, s00);
     }
 
+    if (gParams.NumMipLevels == 3) return;
     GroupMemoryBarrierWithGroupSync();
 
     if (groupIdx == 0)
