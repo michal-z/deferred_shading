@@ -5,8 +5,8 @@
 const uint32_t kNumBufferedFrames = 3;
 const uint32_t kNumSwapBuffers = 4;
 const char *kDemoName = "Deferred Shading Demo";
-const uint32_t kDemoResX = 1280;
-const uint32_t kDemoResY = 720;
+const uint32_t kDemoResX = 1600;//1280;
+const uint32_t kDemoResY = 900;//720;
 
 class CGuiRenderer;
 class CSceneResources;
