@@ -99,12 +99,34 @@ bool CSceneResources::LoadData(const aiScene *importedScene, const char *imageFo
             srvHandle.ptr += descriptorSize;
         }
 
+        XMFLOAT3 minCorner = XMFLOAT3(1000.0f, 1000.0f, 1000.0f);
+        XMFLOAT3 maxCorner = XMFLOAT3(-1000.0f, -1000.0f, -1000.0f);
         for (uint32_t v = 0; v < mesh->mNumVertices; ++v)
         {
             vtxptr[v].Position.x = 10.0f * mesh->mVertices[v].x;
             vtxptr[v].Position.y = 10.0f * mesh->mVertices[v].y;
             vtxptr[v].Position.z = 10.0f * mesh->mVertices[v].z;
+
+            if (vtxptr[v].Position.x < minCorner.x) minCorner.x = vtxptr[v].Position.x;
+            if (vtxptr[v].Position.y < minCorner.y) minCorner.y = vtxptr[v].Position.y;
+            if (vtxptr[v].Position.z < minCorner.z) minCorner.z = vtxptr[v].Position.z;
+
+            if (vtxptr[v].Position.x > maxCorner.x) maxCorner.x = vtxptr[v].Position.x;
+            if (vtxptr[v].Position.y > maxCorner.y) maxCorner.y = vtxptr[v].Position.y;
+            if (vtxptr[v].Position.z > maxCorner.z) maxCorner.z = vtxptr[v].Position.z;
         }
+        MeshSections[m].BBox.Center.x = 0.5f * (maxCorner.x + minCorner.x);
+        MeshSections[m].BBox.Center.y = 0.5f * (maxCorner.y + minCorner.y);
+        MeshSections[m].BBox.Center.z = 0.5f * (maxCorner.z + minCorner.z);
+
+        MeshSections[m].BBox.Extents.x = 0.5f * (maxCorner.x - minCorner.x);
+        MeshSections[m].BBox.Extents.y = 0.5f * (maxCorner.y - minCorner.y);
+        MeshSections[m].BBox.Extents.z = 0.5f * (maxCorner.z - minCorner.z);
+
+        assert(MeshSections[m].BBox.Extents.x > 0.0f);
+        assert(MeshSections[m].BBox.Extents.y > 0.0f);
+        assert(MeshSections[m].BBox.Extents.z > 0.0f);
+
         if (mesh->HasNormals())
         {
             for (uint32_t v = 0; v < mesh->mNumVertices; ++v)

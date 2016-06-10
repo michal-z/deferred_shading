@@ -1,6 +1,7 @@
 #pragma once
 
 #include "demo_common.h"
+#include "DirectXMath/DirectXCollision.h"
 
 struct aiScene;
 class CMipmapGenerator;
@@ -30,6 +31,7 @@ public:
         uint32_t NumVertices = 0;
         uint32_t NumIndices = 0;
         ID3D12Resource *Textures[kNumTexturesPerMesh] = {};
+        BoundingBox BBox;
     };
     eastl::vector<SMeshSection> MeshSections;
 

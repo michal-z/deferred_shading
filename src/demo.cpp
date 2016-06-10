@@ -24,8 +24,8 @@ CDemo::~CDemo()
     // wait for the GPU
     if (CmdQueue && FrameFence && FrameFenceEvent)
     {
-        CmdQueue->Signal(FrameFence, CpuCompletedFrames + 10);
-        FrameFence->SetEventOnCompletion(CpuCompletedFrames + 10, FrameFenceEvent);
+        CmdQueue->Signal(FrameFence, CpuCompletedFences + 10);
+        FrameFence->SetEventOnCompletion(CpuCompletedFences + 10, FrameFenceEvent);
         WaitForSingleObject(FrameFenceEvent, INFINITE);
     }
 
@@ -65,8 +65,8 @@ bool CDemo::Init()
     ID3D12CommandList *cmdLists[] = { (ID3D12CommandList *)CmdList };
     CmdQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
 
-    CmdQueue->Signal(FrameFence, ++CpuCompletedFrames);
-    FrameFence->SetEventOnCompletion(CpuCompletedFrames, FrameFenceEvent);
+    CmdQueue->Signal(FrameFence, ++CpuCompletedFences);
+    FrameFence->SetEventOnCompletion(CpuCompletedFences, FrameFenceEvent);
     WaitForSingleObject(FrameFenceEvent, INFINITE);
 
     for (size_t i = 0; i < uploadBuffers.size(); ++i)
@@ -87,8 +87,8 @@ bool CDemo::Init()
         ID3D12CommandList *cmdLists[] = { (ID3D12CommandList *)CmdList };
         CmdQueue->ExecuteCommandLists(_countof(cmdLists), cmdLists);
 
-        CmdQueue->Signal(FrameFence, ++CpuCompletedFrames);
-        FrameFence->SetEventOnCompletion(CpuCompletedFrames, FrameFenceEvent);
+        CmdQueue->Signal(FrameFence, ++CpuCompletedFences);
+        FrameFence->SetEventOnCompletion(CpuCompletedFences, FrameFenceEvent);
         WaitForSingleObject(FrameFenceEvent, INFINITE);
     }
     delete mipmapGen;
@@ -107,13 +107,20 @@ void CDemo::Update()
     float sinv, cosv;
     XMScalarSinCos(&sinv, &cosv, (float)(0.25 * Time));
 
-    XMMATRIX viewproj = XMMatrixLookAtLH(XMVectorSet(2.0f*cosv, 0.5f, -2.0f*sinv, 1.0f),
-                                         XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f),
-                                         XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f)) *
-        XMMatrixPerspectiveFovLH(XM_PI / 3, (float)Resolution[0] / Resolution[1], 0.1f, 100.0f);
+    XMMATRIX proj = XMMatrixPerspectiveFovLH(XM_PI / 3, (float)Resolution[0] / Resolution[1],
+                                             0.1f, 20.0f);
+    XMVECTOR cameraPosition = XMVectorSet(2.0f*cosv, 0.5f, -2.0f*sinv, 1.0f);
+    XMMATRIX view = XMMatrixLookAtLH(cameraPosition,
+                                     XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f),
+                                     XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+
+    XMVECTOR cameraOrientation = XMQuaternionRotationMatrix(XMMatrixInverse(nullptr, view));
+
+    BFrustum = BoundingFrustum(proj);
+    BFrustum.Transform(BFrustum, 1.0f, cameraOrientation, cameraPosition);
 
     XMStoreFloat4x4A((XMFLOAT4X4A *)FrameResources[FrameIndex].PerFrameCbPtr,
-                     XMMatrixTranspose(viewproj));
+                     XMMatrixTranspose(view * proj));
 
     ImGuiIO &io = ImGui::GetIO();
     io.KeyCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
@@ -127,13 +134,13 @@ void CDemo::Update()
 
     SwapChain->Present(0, 0);
 
-    CmdQueue->Signal(FrameFence, ++CpuCompletedFrames);
+    CmdQueue->Signal(FrameFence, ++CpuCompletedFences);
 
-    const uint64_t gpuCompletedFrames = FrameFence->GetCompletedValue();
+    const uint64_t gpuCompletedFences = FrameFence->GetCompletedValue();
 
-    if ((CpuCompletedFrames - gpuCompletedFrames) >= kNumBufferedFrames)
+    if ((CpuCompletedFences - gpuCompletedFences) >= kNumBufferedFrames)
     {
-        FrameFence->SetEventOnCompletion(gpuCompletedFrames + 1, FrameFenceEvent);
+        FrameFence->SetEventOnCompletion(gpuCompletedFences + 1, FrameFenceEvent);
         WaitForSingleObject(FrameFenceEvent, INFINITE);
     }
 
@@ -214,10 +221,14 @@ void CDemo::RenderScene()
     {
         const CSceneResources::SMeshSection &meshSection = SceneResources->MeshSections[i];
 
-        CmdList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+        if (BFrustum.Intersects(meshSection.BBox))
+        {
+            CmdList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+            CmdList->DrawIndexedInstanced(meshSection.NumIndices, 1, startIndex, baseVertex, 0);
+        }
+
         gpuHandle.ptr += CSceneResources::kNumTexturesPerMesh * DescriptorSize;
 
-        CmdList->DrawIndexedInstanced(meshSection.NumIndices, 1, startIndex, baseVertex, 0);
         startIndex += meshSection.NumIndices;
         baseVertex += meshSection.NumVertices;
     }

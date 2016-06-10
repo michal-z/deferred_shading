@@ -1,12 +1,13 @@
 #pragma once
 
 #include "demo_common.h"
+#include "DirectXMath/DirectXCollision.h"
 
 const uint32_t kNumBufferedFrames = 3;
 const uint32_t kNumSwapBuffers = 4;
 const char *kDemoName = "Deferred Shading Demo";
-const uint32_t kDemoResX = 1600;//1280;
-const uint32_t kDemoResY = 900;//720;
+const uint32_t kDemoResX = 1600;
+const uint32_t kDemoResY = 900;
 
 class CGuiRenderer;
 class CSceneResources;
@@ -56,8 +57,9 @@ private:
 
     D3D12_VIEWPORT Viewport;
     D3D12_RECT ScissorRect;
+    BoundingFrustum BFrustum;
 
-    uint64_t CpuCompletedFrames = 0;
+    uint64_t CpuCompletedFences = 0;
     ID3D12Fence *FrameFence = nullptr;
     HANDLE FrameFenceEvent = nullptr;
 
